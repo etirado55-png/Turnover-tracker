@@ -24,7 +24,7 @@ if not url:
     url = "https://docs.google.com/spreadsheets/d/17lI-rGvCBaSm3Z23jS9CxS0u9T6V7Wh72eTaB27yDBY/edit?gid=0#gid=0"
 
 # If you still use SHEET_NAME, make sure it matches your tab, e.g. "turnover_log" or "Sheet1"
-sheet = client.open_by_url(url).worksheet(SHEET_NAME)
+sheet = client.open_by_url(url).worksheet(turnover_log)
 
 sheet = client.open_by_url(SHEET_URL).worksheet(SHEET_NAME)
 import pandas as pd
