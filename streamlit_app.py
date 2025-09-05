@@ -1,7 +1,23 @@
 import streamlit as st
-# TEMP TEST: comment out after verifying
-# SHEET_URL = "https://docs.google.com/spreadsheets/d/PASTE-YOUR-ID/edit#gid=0"
-# sheet = client.open_by_url(SHEET_URL).worksheet(SHEET_NAME)
+# --- Debug secrets (temporary) ---
+st.subheader("🔐 Secrets Debug")
+st.write("Secrets keys found:", list(st.secrets.keys()))
+
+if "gcp_service_account" in st.secrets:
+    st.success("✅ gcp_service_account is present")
+else:
+    st.error("❌ gcp_service_account is missing")
+
+if "SHEET_URL" in st.secrets:
+    st.success("✅ SHEET_URL is present")
+    st.write("Sheet URL (first 60 chars):", st.secrets["SHEET_URL"][:60] + "...")
+else:
+    st.error("❌ SHEET_URL is missing")
+
+# --- TEMP TEST (comment this out once secrets work) ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/PASTE-YOUR-ID/edit#gid=0"
+sheet = client.open_by_url(SHEET_URL).worksheet(SHEET_NAME)
+
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
