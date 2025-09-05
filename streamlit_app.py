@@ -1,8 +1,4 @@
 import streamlit as st
-missing = [k for k in ("SHEET_URL",) if k not in st.secrets]
-st.write("secrets present:", list(st.secrets.keys()))
-if missing:
-        st.error(f"Missing keys in secret: {missing}")
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
