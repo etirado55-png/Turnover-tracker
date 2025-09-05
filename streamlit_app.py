@@ -1,4 +1,7 @@
 import streamlit as st
+# TEMP TEST: comment out after verifying
+# SHEET_URL = "https://docs.google.com/spreadsheets/d/PASTE-YOUR-ID/edit#gid=0"
+# sheet = client.open_by_url(SHEET_URL).worksheet(SHEET_NAME)
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
