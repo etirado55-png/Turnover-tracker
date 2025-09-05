@@ -24,13 +24,51 @@ if not url:
     url = "https://docs.google.com/spreadsheets/d/17lI-rGvCBaSm3Z23jS9CxS0u9T6V7Wh72eTaB27yDBY/edit?gid=0#gid=0"
 
 # If you still use SHEET_NAME, make sure it matches your tab, e.g. "turnover_log" or "Sheet1"
-sheet = client.open_by_url(url).worksheet(turnover_log)
+sheet = client.open_by_url(url).worksheet("turnover_log")
 
 sheet = client.open_by_url(SHEET_URL).worksheet(SHEET_NAME)
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 import gspread
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
+import pytz
+import gspread
+from google.oauth2.service_account import Credentials
+
+# ----- CONFIG -----
+SHEET_NAME = "turnover_log"   # <-- or "Sheet1" if that’s your tab name
+CUTOFF_HOUR = 6
+TZ = pytz.timezone("America/New_York")
+
+# ----- AUTH -----
+creds = Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"],
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ],
+)
+client = gspread.authorize(creds)
+
+# ----- DEBUG (temporary) -----
+st.write("Secrets keys found:", list(st.secrets.keys()))
+if "SHEET_URL" in st.secrets:
+    st.success("SHEET_URL found in secrets")
+else:
+    st.error("SHEET_URL missing in secrets; using TEMP fallback")
+
+# ----- URL with fallback (TEMP) -----
+url = st.secrets.get("SHEET_URL")
+if not url:
+    # REPLACE THIS with your real sheet link while you fix secrets
+    url = "https://docs.google.com/spreadsheets/d/PASTE-YOUR-ID/edit#gid=0"
+
+# ----- OPEN SHEET (FIXED: pass a string for worksheet name) -----
+sheet = client.open_by_url(url).worksheet(SHEET_NAME)
+
 from google.oauth2.service_account import Credentials
 
 # ================== Settings ==================
