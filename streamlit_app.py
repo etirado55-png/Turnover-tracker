@@ -1,4 +1,20 @@
 import streamlit as st
+# --- Debug secrets (temporary) ---
+st.subheader("🔐 Secrets Debug")
+st.write("Secrets keys found:", list(st.secrets.keys()))
+
+# Check for the specific ones you need
+if "gcp_service_account" in st.secrets:
+    st.success("✅ gcp_service_account is present")
+else:
+    st.error("❌ gcp_service_account is missing")
+
+if "SHEET_URL" in st.secrets:
+    st.success("✅ SHEET_URL is present")
+    st.write("Sheet URL (first 60 chars):", st.secrets["SHEET_URL"][:60] + "...")
+else:
+    st.error("❌ SHEET_URL is missing")
+
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
