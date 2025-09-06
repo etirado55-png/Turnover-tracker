@@ -115,21 +115,63 @@ def list_attachments(wo: str):
 def is_image(path: pathlib.Path) -> bool:
     return path.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
-# ---------------- 6) UI — QUICK ENTRY (OPTIONAL) ----------------
-with st.expander("Add a quick turnover row (optional)"):
-    c1, c2, c3 = st.columns([1.2, 2, 2])
-    with c1:
-        wo_new = st.text_input("WO", placeholder="146720560")
-    with c2:
-        title_new = st.text_input("Title", placeholder="Replace Ocean PEEP computer")
-    with c3:
-        resolution_new = st.text_input("Resolution", placeholder="Replaced; verified show OK")
-    if st.button("Add row", disabled=not wo_new or not title_new):
-        append_row(wo_new, title_new, resolution_new, str(today))
-        st.success(f"Added WO {wo_new}")
-
 # Load DF now that helpers exist
 df = load_df()
+# --- SIDEBAR: Add WO + mini "today" table ---
+with st.sidebar:
+    st.header("➕ Add Work Order")
+
+    # Form so Enter/Return doesn't submit accidentally
+    with st.form("add_wo_form", clear_on_submit=True):
+        wo_new = st.text_input("WO #", placeholder="146720560")
+        title_new = st.text_input("Title", placeholder="Replace Ocean PEEP computer")
+        resolution_new = st.text_area("Resolution (optional)", placeholder="What was done / status")
+        date_new = st.date_input("Date", value=today)  # uses shift_today()
+        # (Optional) quick attach while adding:
+        files_now = st.file_uploader("Attach file(s) now (optional)",
+                                     type=["jpg","jpeg","png","gif","webp","pdf","csv","xlsx","txt","mp4"],
+                                     accept_multiple_files=True,
+                                     key="files_now_sidebar")
+        submitted = st.form_submit_button("Add WO")
+
+    if submitted:
+        # Basic validation
+        if not wo_new.strip() or not title_new.strip():
+            st.error("WO # and Title are required.")
+        else:
+            # Avoid obvious duplicates (same WO + same Date)
+            existing = df[(df["WO"].astype(str) == str(wo_new)) & (df["Date"] == str(date_new))]
+            if not existing.empty:
+                st.warning(f"WO {wo_new} already exists for {date_new}. Added anyway.")
+            # Write row to CSV
+            append_row(str(wo_new).strip(), title_new.strip(), resolution_new.strip(), str(date_new))
+            # Save attachments (if any)
+            if files_now:
+                for f in files_now:
+                    try:
+                        _ = save_upload(f, str(wo_new))
+                    except Exception as e:
+                        st.warning(f"Could not attach {f.name}: {e}")
+            st.success(f"Added WO {wo_new}")
+            st.session_state["_just_added_wo"] = str(wo_new)
+            st.rerun()  # refresh tables below
+
+    st.markdown("---")
+    st.subheader("📅 Today")
+    # Reload to reflect new row if submitted
+    df_side = load_df()
+    today_rows = df_side[df_side["Date"] == str(today)]
+    if today_rows.empty:
+        st.caption("No rows yet today.")
+    else:
+        # Keep it compact in the sidebar
+        st.dataframe(
+            today_rows[["WO", "Title", "Resolution"]].tail(15),
+            use_container_width=True,
+            hide_index=True
+        )
+# --- END SIDEBAR ---
+
 # --- TODAY'S WORK ORDERS BOX (paste right after: df = load_df()) ---
 today_str = str(today)  # uses shift_today() you already defined
 st.divider()
