@@ -5,7 +5,9 @@ import pytz
 import gspread
 from google.oauth2.service_account import Credentials
 
-from bootstrap import get_sheet_url, check_config
+# from bootstrap import get_sheet_url, check_config
+from bootstrap_helpers import get_sheet_url, check_config
+
 
 # ================== Settings ==================
 SHEET_NAME = "turnover_log"        # or "Sheet1" if that's your tab name
