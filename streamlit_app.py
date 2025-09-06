@@ -108,6 +108,21 @@ with st.expander("Where do files go?"):
 - Each WO gets a subfolder: `…/uploads/WO_NUMBER/<timestamp>_filename.ext`.
 """
     )
+# --- date helpers (must be defined before use) ---
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # stdlib timezone in Python 3.9+
+
+def shift_today(cutover_hour: int = 4, tz_name: str = "America/New_York"):
+    """
+    Returns the 'workday' date. Before 04:00 local, treat it as the previous day.
+    Change cutover_hour if your shift rolls at a different time.
+    """
+    tz = ZoneInfo(tz_name)
+    now = datetime.now(tz)
+    if now.hour < cutover_hour:
+        return (now - timedelta(days=1)).date()
+    return now.date()
+# --- end helpers ---
 
 # --- UI ---
 st.title("Turnover Notes Tracker (Web)")
