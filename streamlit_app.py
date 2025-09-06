@@ -1,83 +1,18 @@
 import streamlit as st
-# --- Debug secrets (temporary) ---
-st.subheader("🔐 Secrets Debug")
-st.write("Secrets keys found:", list(st.secrets.keys()))
-
-if "gcp_service_account" in st.secrets:
-    st.success("✅ gcp_service_account is present")
-else:
-    st.error("❌ gcp_service_account is missing")
-
-if "SHEET_URL" in st.secrets:
-    st.success("✅ SHEET_URL is present")
-    st.write("Sheet URL (first 60 chars):", st.secrets["SHEET_URL"][:60] + "...")
-else:
-    st.error("❌ SHEET_URL is missing")
-
-# --- TEMP TEST (comment this out once secrets work) ---
-SHEET_URL = "https://docs.google.com/spreadsheets/d/PASTE-YOUR-ID/edit#gid=0"
-# --- TEMP: fallback URL until secrets are fixed ---
-# Try to read from secrets; if missing, use your hardcoded URL.
-url = st.secrets.get("SHEET_URL")
-if not url:
-    # REPLACE with your real sheet link:
-    url = "https://docs.google.com/spreadsheets/d/17lI-rGvCBaSm3Z23jS9CxS0u9T6V7Wh72eTaB27yDBY/edit?gid=0#gid=0"
-
-# If you still use SHEET_NAME, make sure it matches your tab, e.g. "turnover_log" or "Sheet1"
-sheet = client.open_by_url(url).worksheet("turnover_log")
-
-sheet = client.open_by_url(SHEET_URL).worksheet(SHEET_NAME)
-import pandas as pd
-from datetime import datetime, timedelta
-import pytz
-import gspread
-import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ----- CONFIG -----
-SHEET_NAME = "turnover_log"   # <-- or "Sheet1" if that’s your tab name
-CUTOFF_HOUR = 6
-TZ = pytz.timezone("America/New_York")
-
-# ----- AUTH -----
-creds = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ],
-)
-client = gspread.authorize(creds)
-
-# ----- DEBUG (temporary) -----
-st.write("Secrets keys found:", list(st.secrets.keys()))
-if "SHEET_URL" in st.secrets:
-    st.success("SHEET_URL found in secrets")
-else:
-    st.error("SHEET_URL missing in secrets; using TEMP fallback")
-
-# ----- URL with fallback (TEMP) -----
-url = st.secrets.get("SHEET_URL")
-if not url:
-    # REPLACE THIS with your real sheet link while you fix secrets
-    url = "https://docs.google.com/spreadsheets/d/PASTE-YOUR-ID/edit#gid=0"
-
-# ----- OPEN SHEET (FIXED: pass a string for worksheet name) -----
-sheet = client.open_by_url(url).worksheet(SHEET_NAME)
-
-from google.oauth2.service_account import Credentials
+from bootstrap import get_sheet_url, check_config
 
 # ================== Settings ==================
-SHEET_NAME = "turnover_log"        # Tab name inside your Google Sheet
+SHEET_NAME = "turnover_log"        # or "Sheet1" if that's your tab name
 CUTOFF_HOUR = 6                    # Night-shift cutoff (6 AM)
 TZ = pytz.timezone("America/New_York")
 
-# ======= Auth to Google Sheets (Streamlit Secrets) =======
-# In Streamlit Cloud: Settings → Secrets → add [gcp_service_account] and SHEET_URL
+# ================== Auth (uses Streamlit secrets) ==================
 creds = Credentials.from_service_account_info(
     st.secrets["gcp_service_account"],
     scopes=[
@@ -86,19 +21,22 @@ creds = Credentials.from_service_account_info(
     ],
 )
 client = gspread.authorize(creds)
-sheet = client.open_by_url(st.secrets["SHEET_URL"]).worksheet(SHEET_NAME)
+
+# Run a silent health check (shows a red banner only if broken)
+sheet_url = check_config(client, sheet_name=SHEET_NAME)
+sheet = client.open_by_url(sheet_url).worksheet(SHEET_NAME)
 
 # ================== Helpers ==================
-def ensure_header():
-    values = sheet.get_all_values()
-    if not values:
-        sheet.append_row(["Date", "WO Number", "Title", "Resolution"])
-
 def shift_today():
     now = datetime.now(TZ)
     if now.hour < CUTOFF_HOUR:
         return (now - timedelta(days=1)).date().isoformat()
     return now.date().isoformat()
+
+def ensure_header():
+    values = sheet.get_all_values()
+    if not values:
+        sheet.append_row(["Date", "WO Number", "Title", "Resolution"])
 
 def load_df():
     ensure_header()
@@ -106,16 +44,18 @@ def load_df():
     return pd.DataFrame(data, columns=["Date", "WO Number", "Title", "Resolution"])
 
 def save_row(date_str, wo, title, resolution):
-    """Add new or update today’s row with same WO."""
+    """
+    Add a new row for today's date OR update the existing row with the same WO.
+    - Title only overwritten if provided (non-empty).
+    - Resolution can be blank (we don't invent text).
+    """
     df = load_df()
     mask = (df["Date"] == date_str) & (df["WO Number"].astype(str) == str(wo))
     if mask.any():
-        idx = df[mask].index[0]     # 0-based
-        row_num = idx + 2           # +1 header, +1 1-based rows
-        # Update title if provided (don’t wipe it out if user leaves blank)
+        idx = df[mask].index[0]  # 0-based
+        row_num = idx + 2        # +1 header row, +1 for 1-based indexing
         if str(title).strip():
             sheet.update_cell(row_num, 3, title)
-        # Resolution can be blank (don’t invent text)
         sheet.update_cell(row_num, 4, resolution)
         return "updated"
     else:
@@ -138,16 +78,6 @@ def numeric_sort_wo(df):
 st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
 st.title("Turnover Notes Tracker (Web)")
 
-# Make state keys once
-for k, v in {
-    "wo": "",
-    "title": "",
-    "resolution": "",
-    "selected_label": "",
-    "refresh_toggle": False,
-}.items():
-    st.session_state.setdefault(k, v)
-
 today = shift_today()
 df = load_df()
 df_today = numeric_sort_wo(df[df["Date"] == today])
@@ -160,68 +90,55 @@ tab_input, tab_today, tab_search, tab_export = st.tabs(
 with tab_input:
     st.subheader(f"Add or Update (Shift date: **{today}**, cutoff {CUTOFF_HOUR:02d}:00 {TZ.zone})")
 
-    left, right = st.columns([1,2])
+    left, right = st.columns([1, 2])
+
     with left:
-        # Build dropdown labels like "WO146732350 — Title"
         options = ["— Select a WO from today —"] + [
             f"WO{row['WO Number']} — {row['Title']}" for _, row in df_today.iterrows()
         ]
+        sel = st.selectbox("Pick today’s WO (optional) to auto-fill:", options, index=0, key="selected_label")
 
-        selected = st.selectbox(
-            "Pick today’s WO to auto-fill (optional):",
-            options,
-            index=0,
-            key="selected_label",
-        )
-
-        def parse_selected(sel):
-            if sel.startswith("WO") and " — " in sel:
-                wo_part, title_part = sel.split(" — ", 1)
-                wo_clean = wo_part.replace("WO", "").strip()
-                return wo_clean, title_part
+        def parse_selected(s):
+            if s.startswith("WO") and " — " in s:
+                wo_part, title_part = s.split(" — ", 1)
+                return wo_part.replace("WO", "").strip(), title_part
             return "", ""
 
-        # If user chose an item, prefill fields (including any existing resolution)
-        if selected != "— Select a WO from today —":
-            wo_clean, title_prefill = parse_selected(selected)
-            st.session_state.wo = wo_clean
-            st.session_state.title = title_prefill
-            # pull current resolution for that WO (if any)
-            mask = (df_today["WO Number"].astype(str) == wo_clean)
+        if sel != "— Select a WO from today —":
+            wo_prefill, title_prefill = parse_selected(sel)
+            # fetch existing resolution (if any)
+            res_prefill = ""
+            mask = (df_today["WO Number"].astype(str) == wo_prefill)
             if mask.any():
-                st.session_state.resolution = str(df_today.loc[mask, "Resolution"].iloc[0] or "")
+                res_prefill = str(df_today.loc[mask, "Resolution"].iloc[0] or "")
         else:
-            # leave whatever is in the fields (manual entry allowed)
-            pass
+            wo_prefill, title_prefill, res_prefill = "", "", ""
 
-        # Manual fields (can override dropdown prefill)
-        st.session_state.wo = st.text_input("WO Number", value=st.session_state.wo, placeholder="146732350")
+        wo = st.text_input("WO Number", value=wo_prefill, placeholder="146732350")
+
     with right:
-        st.session_state.title = st.text_input("Title", value=st.session_state.title, placeholder="Count and identify INOP GL at WCG")
-        st.session_state.resolution = st.text_area("Resolution (optional)", value=st.session_state.resolution, height=120)
+        title_in = st.text_input("Title", value=title_prefill, placeholder="Count and identify INOP GL at WCG")
+        res_in = st.text_area("Resolution (optional)", value=res_prefill, height=120)
 
-    c1, c2, c3 = st.columns([1,1,1])
+    c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("Save / Update Today’s WO", type="primary"):
-            wo_in = str(st.session_state.wo).strip()
-            title_in = str(st.session_state.title).strip()
-            res_in = str(st.session_state.resolution).strip()
-            if wo_in and title_in:
-                status = save_row(today, wo_in, title_in, res_in)
-                st.success(f"WO{wo_in} {status}.")
-                # little refresh to update Today tab & dropdown
-                st.session_state.refresh_toggle = not st.session_state.refresh_toggle
+            if wo.strip() and title_in.strip():
+                status = save_row(today, wo.strip(), title_in.strip(), res_in.strip())
+                st.success(f"WO{wo} {status}.")
+                # force-refresh the page state
+                st.rerun()
             else:
                 st.error("WO Number and Title are required.")
+
     with c2:
         if st.button("Clear fields"):
-            st.session_state.wo = ""
-            st.session_state.title = ""
-            st.session_state.resolution = ""
             st.session_state.selected_label = "— Select a WO from today —"
+            st.rerun()
+
     with c3:
         if st.button("Refresh list"):
-            st.session_state.refresh_toggle = not st.session_state.refresh_toggle
+            st.rerun()
 
 # ---------- Today ----------
 with tab_today:
@@ -258,10 +175,12 @@ with tab_export:
     if df_today.empty:
         st.info("No entries to export yet.")
     else:
+        # Build text in your exact format:
         lines = [f"# {today}", "", "Daily PM completed, Rain curtain Filters cleaned.", ""]
         for _, r in df_today.iterrows():
             lines.append(f"- **WO{r['WO Number']} — {r['Title']}** | {r['Resolution']}")
         export_text = "\n".join(lines)
+
         st.code(export_text, language="markdown")
         st.download_button("Download as .txt", export_text, file_name=f"turnover_{today}.txt")
         st.caption("Tip: long-press/copy on your phone, or download and upload to OneDrive.")
