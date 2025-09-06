@@ -11,42 +11,34 @@ from bootstrap_helpers import get_sheet_url, check_config
 # --- Page Config (must be first st.* call) ---
 st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
 
-st.title("Turnover Notes")
-# --- SIMPLE WO ATTACHMENTS (OneDrive-backed) ---
-
-# --- SIMPLE WO ATTACHMENTS (OneDrive-backed) ---
-import pathlib, time
+# ---- Writable uploads folder with OneDrive-or-local fallback ----
+import pathlib, os, tempfile
 import streamlit as st
-
-BASE_DIR = pathlib.Path("/home/eduardo/OneDrive")   # <- your real sync_dir
-UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# --- Upload path with OneDrive-or-local fallback ---
-import pathlib, os
 
 def first_writable(paths):
     for p in paths:
         try:
             p.mkdir(parents=True, exist_ok=True)
-            test = p / ".write_test"
-            test.write_text("ok", encoding="utf-8")
-            test.unlink()
+            t = p / ".write_test"
+            t.write_text("ok", encoding="utf-8")
+            t.unlink()
             return p
         except Exception:
             continue
     raise RuntimeError("No writable upload directory found")
 
-# Candidate locations (first that works wins)
 CANDIDATES = [
-    pathlib.Path("/home/eduardo/OneDrive/Turnover/uploads"),     # your Linux OneDrive sync
-    pathlib.Path.home() / "OneDrive/Turnover/uploads",            # alt OneDrive layout
-    pathlib.Path.cwd() / "uploads",                                # cloud-safe local folder
+    pathlib.Path("/home/eduardo/OneDrive/Turnover/uploads"),          # your Linux PC OneDrive
+    pathlib.Path.home() / "OneDrive" / "Turnover" / "uploads",         # alt OneDrive layout
+    pathlib.Path("/mount/data/uploads"),                               # Streamlit Cloud writable
+    pathlib.Path.cwd() / "uploads",                                    # repo folder (may be read-only in cloud)
+    pathlib.Path(tempfile.gettempdir()) / "turnover_uploads",          # always writable fallback
 ]
 
 UPLOAD_DIR = first_writable(CANDIDATES)
-st.caption(f"Uploads path → {UPLOAD_DIR}")  # so you can see which one is active
-# --- end path setup ---
+st.caption(f"Attachments folder → {UPLOAD_DIR}")  # see which one is active
+# ---- end uploads folder setup ----
+
 
 
 def save_upload(uploaded_file, wo: str):
