@@ -1,16 +1,33 @@
-# streamlit_app.py  — Turnover Notes (attachments with OneDrive-or-local fallback)
+# streamlit_app.py — Turnover Notes (uploads + CSV + camera; OneDrive-or-local safe)
 
 import os
+import csv
 import time
 import tempfile
 import pathlib
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+import pandas as pd
 import streamlit as st
 
-# 1) Page setup
+# ---------------- 1) PAGE SETUP ----------------
 st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
 st.title("Turnover Notes")
 
-# 2) Pick a writable uploads folder (tries OneDrive path on your PC, falls back elsewhere)
+# ---------------- 2) DATE HELPER ----------------
+def shift_today(cutover_hour: int = 4, tz_name: str = "America/New_York"):
+    """Return 'workday' date; before cutover treat as previous day."""
+    tz = ZoneInfo(tz_name)
+    now = datetime.now(tz)
+    if now.hour < cutover_hour:
+        return (now - timedelta(days=1)).date()
+    return now.date()
+
+today = shift_today()
+st.caption(f"Turnover date → {today}")
+
+# ---------------- 3) WRITABLE BASE DIR (OneDrive-or-local fallback) ----------------
 def first_writable(paths):
     for p in paths:
         try:
@@ -21,20 +38,59 @@ def first_writable(paths):
             return p
         except Exception:
             continue
-    raise RuntimeError("No writable upload directory found.")
+    raise RuntimeError("No writable base directory found.")
 
-# If you ever move machines, just change the first candidate to your OneDrive path
-CANDIDATES = [
-    pathlib.Path("/home/eduardo/OneDrive/Turnover/uploads"),           # your Linux OneDrive
-    pathlib.Path.home() / "OneDrive" / "Turnover" / "uploads",         # alt OneDrive layout
-    pathlib.Path("/mount/data/uploads"),                                # Streamlit Cloud writable
-    pathlib.Path.cwd() / "uploads",                                     # repo folder (may be RO in cloud)
-    pathlib.Path(tempfile.gettempdir()) / "turnover_uploads",           # always-writable fallback
+# Pick ONE base place for app data (uploads + CSV)
+BASE_CANDIDATES = [
+    pathlib.Path("/home/eduardo/OneDrive/Turnover"),            # your Linux OneDrive
+    pathlib.Path.home() / "OneDrive" / "Turnover",              # alt OneDrive layout
+    pathlib.Path("/mount/data/turnover"),                       # Streamlit Cloud writable
+    pathlib.Path.cwd() / "turnover_data",                       # repo folder (may be RO in cloud)
+    pathlib.Path(tempfile.gettempdir()) / "turnover_data",      # always-writable fallback
 ]
-UPLOAD_DIR = first_writable(CANDIDATES)
-st.caption(f"Attachments folder → {UPLOAD_DIR}")
+BASE_DIR = first_writable(BASE_CANDIDATES)
 
-# 3) Helpers
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_FILE = DATA_DIR / "turnover.csv"   # WO,Title,Resolution,Date
+
+st.caption(f"Attachments folder → {UPLOAD_DIR}")
+st.caption(f"Data file → {DATA_FILE}")
+
+# ---------------- 4) DATA (CSV) ----------------
+CSV_COLUMNS = ["WO", "Title", "Resolution", "Date"]
+
+def init_csv():
+    if not DATA_FILE.exists():
+        with open(DATA_FILE, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(CSV_COLUMNS)
+
+def load_df() -> pd.DataFrame:
+    init_csv()
+    try:
+        df = pd.read_csv(DATA_FILE, dtype=str)
+    except Exception:
+        init_csv()
+        df = pd.read_csv(DATA_FILE, dtype=str)
+    # Ensure expected columns exist
+    for col in CSV_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+    # Normalize WO as string
+    df["WO"] = df["WO"].astype(str)
+    return df[CSV_COLUMNS]
+
+def append_row(wo: str, title: str, resolution: str, date_str: str):
+    init_csv()
+    with open(DATA_FILE, "a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow([str(wo), title, resolution, date_str])
+
+# ---------------- 5) ATTACHMENTS HELPERS ----------------
 def safe_wo(wo: str) -> str:
     return str(wo).strip().replace("/", "_").replace("\\", "_")
 
@@ -59,17 +115,32 @@ def list_attachments(wo: str):
 def is_image(path: pathlib.Path) -> bool:
     return path.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
-# 4) UI — Attach files to a WO
+# ---------------- 6) UI — QUICK ENTRY (OPTIONAL) ----------------
+with st.expander("Add a quick turnover row (optional)"):
+    c1, c2, c3 = st.columns([1.2, 2, 2])
+    with c1:
+        wo_new = st.text_input("WO", placeholder="146720560")
+    with c2:
+        title_new = st.text_input("Title", placeholder="Replace Ocean PEEP computer")
+    with c3:
+        resolution_new = st.text_input("Resolution", placeholder="Replaced; verified show OK")
+    if st.button("Add row", disabled=not wo_new or not title_new):
+        append_row(wo_new, title_new, resolution_new, str(today))
+        st.success(f"Added WO {wo_new}")
+
+# Load DF now that helpers exist
+df = load_df()
+
+# ---------------- 7) UI — ATTACH FILES TO A WO ----------------
 st.divider()
 st.subheader("Attach files to a Work Order")
 
-wo_for_upload = st.text_input("WO number to attach to (e.g., 146720560)", key="wo_attach")
+wo_for_upload = st.text_input("WO number to attach to", key="wo_attach")
 files = st.file_uploader(
     "Choose file(s)",
     type=["jpg","jpeg","png","gif","webp","pdf","csv","xlsx","txt","mp4"],
     accept_multiple_files=True
 )
-
 if wo_for_upload and files:
     saved_ct = 0
     for f in files:
@@ -82,147 +153,74 @@ if wo_for_upload and files:
     if saved_ct:
         st.toast(f"Attached {saved_ct} file(s) to WO {wo_for_upload}", icon="✅")
 
-# 5) UI — View attachments for an old WO
+# ---------------- 8) UI — OPTIONAL CAMERA (toggle) ----------------
 st.divider()
-st.subheader("View attachments for an old WO")
+st.subheader("Take a photo (optional)")
+cam_on = st.toggle("Enable camera", value=False, help="Toggle on to open camera, off to release it.")
+cam_slot = st.empty()
+if cam_on:
+    wo_for_cam = st.text_input("WO to attach camera photo to", key="wo_cam")
+    photo = cam_slot.camera_input("Take a photo")
+    if wo_for_cam and photo:
+        try:
+            p = save_upload(photo, wo_for_cam)
+            st.success(f"Photo saved → {p}")
+            st.image(photo)
+        except Exception as e:
+            st.error(f"Failed to save photo: {e}")
+else:
+    cam_slot.empty()
+    if "photo" in st.session_state:
+        del st.session_state["photo"]
 
-wo_search = st.text_input("Enter WO to view attachments", key="wo_view")
-if wo_search:
-    items = list_attachments(wo_search)
+# ---------------- 9) UI — SEARCH & VIEW ----------------
+st.divider()
+st.subheader("Search WOs and view attachments")
+
+q = st.text_input("Search by WO (exact) or filter by text in Title/Resolution")
+show_df = df.copy()
+
+hits = pd.DataFrame()
+if q:
+    # exact WO match OR substring in title/resolution
+    hits = show_df[
+        (show_df["WO"].astype(str) == str(q)) |
+        (show_df["Title"].str.contains(q, case=False, na=False)) |
+        (show_df["Resolution"].str.contains(q, case=False, na=False))
+    ]
+
+st.markdown("**Results**")
+if q:
+    if hits.empty:
+        st.info("No rows match.")
+    else:
+        st.dataframe(hits, use_container_width=True, hide_index=True)
+else:
+    st.dataframe(show_df.tail(25), use_container_width=True, hide_index=True)
+
+# If the query looks like a WO number, show its attachments below
+wo_guess = q if q and q.isdigit() else ""
+if wo_guess:
+    st.markdown(f"**Attachments for WO {wo_guess}**")
+    items = list_attachments(wo_guess)
     if not items:
         st.info("No attachments found for that WO.")
     else:
-        st.caption(f"{len(items)} file(s) found for WO {safe_wo(wo_search)} (newest first).")
+        st.caption(f"{len(items)} file(s) (newest first).")
         for p in items:
             if is_image(p) and p.exists():
                 st.image(str(p), caption=p.name)
             else:
                 st.write(f"• {p.name} — {p}")
 
-# 6) (Optional) Quick help
-with st.expander("Where do files go?"):
+# ---------------- 10) HELP ----------------
+with st.expander("Where is everything saved?"):
     st.markdown(
         f"""
-- **On your Linux PC**: uploads save under `{UPLOAD_DIR}` (and sync to OneDrive if that path is your OneDrive).
-- **On Streamlit Cloud**: uploads fall back to a local folder (ephemeral).
-- Each WO gets a subfolder: `…/uploads/WO_NUMBER/<timestamp>_filename.ext`.
+- **Base folder**: `{BASE_DIR}`
+- **CSV file**: `{DATA_FILE}` (created if missing)
+- **Attachments**: `{UPLOAD_DIR}` → `…/uploads/WO/<timestamp>_filename.ext`
+- On your Linux PC (with OneDrive path available), this syncs to OneDrive.
+- On Streamlit Cloud, it falls back to a local writable folder (ephemeral).
 """
     )
-# --- date helpers (must be defined before use) ---
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # stdlib timezone in Python 3.9+
-
-def shift_today(cutover_hour: int = 4, tz_name: str = "America/New_York"):
-    """
-    Returns the 'workday' date. Before 04:00 local, treat it as the previous day.
-    Change cutover_hour if your shift rolls at a different time.
-    """
-    tz = ZoneInfo(tz_name)
-    now = datetime.now(tz)
-    if now.hour < cutover_hour:
-        return (now - timedelta(days=1)).date()
-    return now.date()
-# --- end helpers ---
-
-# --- UI ---
-st.title("Turnover Notes Tracker (Web)")
-
-today = shift_today()
-df = load_df()
-df_today = numeric_sort_wo(df[df["Date"] == today])
-
-tab_input, tab_today, tab_search, tab_export = st.tabs(
-    ["➕ Add/Update", "📅 Today", "🔎 Search", "📤 Export"]
-)
-
-# Add/Update (with dropdown of today's WOs)
-with tab_input:
-    st.subheader(f"Add or Update (Shift date: **{today}**, cutoff {CUTOFF_HOUR:02d}:00 {TZ.zone})")
-    left, right = st.columns([1, 2])
-
-    with left:
-        options = ["— Select a WO from today —"] + [
-            f"WO{row['WO Number']} — {row['Title']}" for _, row in df_today.iterrows()
-        ]
-        sel = st.selectbox("Pick today’s WO to auto-fill (optional):", options, index=0, key="selected_label")
-
-        def parse_selected(s):
-            if s.startswith("WO") and " — " in s:
-                wo_part, title_part = s.split(" — ", 1)
-                return wo_part.replace("WO", "").strip(), title_part
-            return "", ""
-
-        if sel != "— Select a WO from today —":
-            wo_prefill, title_prefill = parse_selected(sel)
-            res_prefill = ""
-            mask = (df_today["WO Number"].astype(str) == wo_prefill)
-            if mask.any():
-                res_prefill = str(df_today.loc[mask, "Resolution"].iloc[0] or "")
-        else:
-            wo_prefill, title_prefill, res_prefill = "", "", ""
-
-        wo = st.text_input("WO Number", value=wo_prefill, placeholder="146732350")
-
-    with right:
-        title_in = st.text_input("Title", value=title_prefill, placeholder="Count and identify INOP GL at WCG")
-        res_in = st.text_area("Resolution (optional)", value=res_prefill, height=120)
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("Save / Update Today’s WO", type="primary"):
-            if wo.strip() and title_in.strip():
-                status = save_row(today, wo.strip(), title_in.strip(), res_in.strip())
-                st.success(f"WO{wo} {status}.")
-                st.rerun()
-            else:
-                st.error("WO Number and Title are required.")
-    with c2:
-        if st.button("Clear fields"):
-            st.session_state.selected_label = "— Select a WO from today —"
-            st.rerun()
-    with c3:
-        if st.button("Refresh list"):
-            st.rerun()
-
-# Today
-with tab_today:
-    st.subheader(f"Today’s WOs — {today}")
-    if df_today.empty:
-        st.write("No entries for today yet.")
-    else:
-        st.dataframe(df_today.fillna(""), use_container_width=True)
-
-# Search
-with tab_search:
-    st.subheader("Search by Title / Resolution")
-    q = st.text_input("Search text", placeholder="e.g., PDS 3091")
-    today_only = st.checkbox("Search today only", value=True)
-    if st.button("Run Search"):
-        base = df_today if today_only else df
-        if q.strip():
-            ql = q.lower()
-            hits = base[
-                base["Title"].str.lower().str.contains(ql, na=False)
-                | base["Resolution"].str.lower().str.contains(ql, na=False)
-            ]
-        else:
-            hits = base.iloc[0:0]
-        if hits.empty:
-            scope = "today" if today_only else "all dates"
-            st.warning(f"No matches for “{q}” in {scope}.")
-        else:
-            st.dataframe(numeric_sort_wo(hits), use_container_width=True)
-
-# Export
-with tab_export:
-    st.subheader("Export Today’s Turnover (plain text)")
-    if df_today.empty:
-        st.info("No entries to export yet.")
-    else:
-        lines = [f"# {today}", "", "Daily PM completed, Rain curtain Filters cleaned.", ""]
-        for _, r in df_today.iterrows():
-            lines.append(f"- **WO{r['WO Number']} — {r['Title']}** | {r['Resolution']}")
-        export_text = "\n".join(lines)
-        st.code(export_text, language="markdown")
-        st.download_button("Download as .txt", export_text, file_name=f"turnover_{today}.txt")
-        st.caption("Tip: long-press/copy on your phone, or download and upload to OneDrive.")
