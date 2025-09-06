@@ -130,6 +130,38 @@ with st.expander("Add a quick turnover row (optional)"):
 
 # Load DF now that helpers exist
 df = load_df()
+# --- TODAY'S WORK ORDERS BOX (paste right after: df = load_df()) ---
+today_str = str(today)  # uses shift_today() you already defined
+st.divider()
+st.subheader(f"Today's Work Orders — {today_str}")
+
+today_rows = df[df["Date"] == today_str]
+
+if today_rows.empty:
+    st.info("No rows logged for today yet.")
+else:
+    st.caption(f"{len(today_rows)} item(s)")
+    st.dataframe(today_rows, use_container_width=True, hide_index=True)
+
+    # Optional: quick peek at attachments for each of today's WOs
+    if st.toggle("Show today's attachments", value=False, key="show_today_atts"):
+        for _, row in today_rows.iterrows():
+            wo = str(row["WO"])
+            st.markdown(f"**WO {wo}** — {row['Title']}")
+            attachments = list_attachments(wo)
+            if not attachments:
+                st.write("• No attachments")
+            else:
+                # show images inline; list non-images
+                shown = 0
+                for p in attachments:
+                    if is_image(p) and p.exists() and shown < 4:   # cap thumbnails so it stays tidy
+                        st.image(str(p), caption=p.name, use_column_width=True)
+                        shown += 1
+                    else:
+                        st.write(f"• {p.name} — {p}")
+            st.divider()
+# --- END TODAY'S WORK ORDERS BOX ---
 
 # ---------------- 7) UI — ATTACH FILES TO A WO ----------------
 st.divider()
