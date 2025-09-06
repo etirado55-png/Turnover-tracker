@@ -8,8 +8,11 @@ import pytz
 import gspread
 from google.oauth2.service_account import Credentials
 
-# from bootstrap import get_sheet_url, check_config
+# OLD
+from bootstrap import get_sheet_url, check_config
+# NEW
 from bootstrap_helpers import get_sheet_url, check_config
+
 
 
 # ================== Settings ==================
