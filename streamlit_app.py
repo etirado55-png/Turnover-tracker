@@ -1,3 +1,6 @@
+import inspect, bootstrap_helpers
+st.caption(f"Loaded helper module: {inspect.getfile(bootstrap_helpers)}")
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
