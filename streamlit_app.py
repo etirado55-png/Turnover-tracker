@@ -7,10 +7,6 @@ from datetime import datetime, timedelta
 import pytz
 import gspread
 from google.oauth2.service_account import Credentials
-
-# OLD
-from bootstrap import get_sheet_url, check_config
-# NEW
 from bootstrap_helpers import get_sheet_url, check_config
 
 
