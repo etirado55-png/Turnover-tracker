@@ -22,6 +22,33 @@ BASE_DIR = pathlib.Path("/home/eduardo/OneDrive")   # <- your real sync_dir
 UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# --- Upload path with OneDrive-or-local fallback ---
+import pathlib, os
+
+def first_writable(paths):
+    for p in paths:
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            test = p / ".write_test"
+            test.write_text("ok", encoding="utf-8")
+            test.unlink()
+            return p
+        except Exception:
+            continue
+    raise RuntimeError("No writable upload directory found")
+
+# Candidate locations (first that works wins)
+CANDIDATES = [
+    pathlib.Path("/home/eduardo/OneDrive/Turnover/uploads"),     # your Linux OneDrive sync
+    pathlib.Path.home() / "OneDrive/Turnover/uploads",            # alt OneDrive layout
+    pathlib.Path.cwd() / "uploads",                                # cloud-safe local folder
+]
+
+UPLOAD_DIR = first_writable(CANDIDATES)
+st.caption(f"Uploads path → {UPLOAD_DIR}")  # so you can see which one is active
+# --- end path setup ---
+
+
 def save_upload(uploaded_file, wo: str):
     safe_wo = str(wo).strip().replace("/", "_").replace("\\", "_")
     folder = UPLOAD_DIR / safe_wo
