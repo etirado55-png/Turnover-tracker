@@ -12,10 +12,72 @@ from bootstrap_helpers import get_sheet_url, check_config
 st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
 
 st.title("Turnover Notes")
+# --- SIMPLE WO ATTACHMENTS (OneDrive-backed) ---
+
+import pathlib, time
+import streamlit as st
+
+# Point uploads into OneDrive so they sync
+BASE_DIR = pathlib.Path.home() / "OneDrive"          # <- replace if your sync_dir is different
+UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+def save_upload(uploaded_file, wo: str):
+    safe_wo = str(wo).strip().replace("/", "_").replace("\\", "_")
+    folder = UPLOAD_DIR / safe_wo
+    folder.mkdir(parents=True, exist_ok=True)
+    ts = int(time.time() * 1000)
+    safe_name = uploaded_file.name.replace("/", "_").replace("\\", "_")
+    out_path = folder / f"{ts}_{safe_name}"
+    with open(out_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return out_path
+
+def list_attachments(wo: str):
+    folder = UPLOAD_DIR / str(wo)
+    if not folder.exists():
+        return []
+    return sorted(folder.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+st.divider()
+st.subheader("Attach files to a Work Order (syncs to OneDrive)")
+
+wo_for_upload = st.text_input("WO number to attach to (e.g., 146720560)")
+files = st.file_uploader(
+    "Choose file(s)",
+    type=["jpg","jpeg","png","pdf","csv","xlsx","txt","mp4"],
+    accept_multiple_files=True
+)
+
+if wo_for_upload and files:
+    for f in files:
+        p = save_upload(f, wo_for_upload)
+        st.success(f"Saved {f.name} → {p}")
+
+st.divider()
+st.subheader("View attachments for an old WO")
+
+wo_search = st.text_input("Enter WO to view attachments", key="wo_search")
+if wo_search:
+    items = list_attachments(wo_search)
+    if not items:
+        st.info("No attachments found for that WO.")
+    else:
+        st.caption(f"{len(items)} file(s) found.")
+        for p in items:
+            name = p.name.lower()
+            if name.endswith((".jpg",".jpeg",".png")) and p.exists():
+                st.image(str(p), caption=p.name)
+            else:
+                st.write(f"• {p.name} — {p}")
+# --- END SIMPLE WO ATTACHMENTS ---
 
 # --- START upload section ---
-UPLOAD_DIR = pathlib.Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Use your OneDrive path here. If your sync_dir is different, paste that exact path.
+BASE_DIR = = /home/eduardo/OneDrive              # e.g., /home/you/OneDrive
+UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"           # creates OneDrive/Turnover/uploads
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def save_upload(uploaded_file, subdir=""):
     folder = UPLOAD_DIR / subdir if subdir else UPLOAD_DIR
