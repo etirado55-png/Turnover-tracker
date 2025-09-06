@@ -10,6 +10,46 @@ from bootstrap_helpers import get_sheet_url, check_config
 # --- Page Config (must be first st.* call) ---
 st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
 
+st.title("Turnover Notes")
+
+# --- START upload section ---
+UPLOAD_DIR = pathlib.Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+def save_upload(uploaded_file, subdir=""):
+    folder = UPLOAD_DIR / subdir if subdir else UPLOAD_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    timestamp = int(time.time() * 1000)
+    safe_name = uploaded_file.name.replace("/", "_")
+    out_path = folder / f"{timestamp}_{safe_name}"
+    with open(out_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return out_path
+
+tabs = st.tabs(["📤 Upload file(s)", "📷 Take a photo (iOS/Android/Desktop)"])
+
+with tabs[0]:
+    files = st.file_uploader(
+        "Choose file(s)",
+        type=["jpg", "jpeg", "png", "pdf", "csv", "xlsx"],
+        accept_multiple_files=True,
+        help="On iPhone/iPad, tap to pick from Photos or Files."
+    )
+    if files:
+        for f in files:
+            path = save_upload(f, subdir="user_uploads")
+            st.success(f"Saved {f.name} to {path}")
+            if f.type.startswith("image/"):
+                st.image(f, caption=f.name)
+
+with tabs[1]:
+    photo = st.camera_input("Take a photo")
+    if photo:
+        path = save_upload(photo, subdir="camera")
+        st.success(f"Photo saved to {path}")
+        st.image(photo)
+# --- END upload section ---
+
 # --- Settings ---
 SHEET_NAME = "turnover_log"      # Rename your sheet tab OR set to "Sheet1"
 CUTOFF_HOUR = 6                  # Night shift cutoff (6 AM)
