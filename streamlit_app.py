@@ -1,8 +1,4 @@
-import inspect, bootstrap_helpers
-import streamlit as st
-st.caption(f"Using helper file: {inspect.getfile(bootstrap_helpers)}")
-
-
+# --- Imports ---
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -11,14 +7,15 @@ import gspread
 from google.oauth2.service_account import Credentials
 from bootstrap_helpers import get_sheet_url, check_config
 
+# --- Page Config (must be first st.* call) ---
+st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
 
-
-# ================== Settings ==================
-SHEET_NAME = "turnover_log"        # or "Sheet1" if that's your tab name
-CUTOFF_HOUR = 6                    # Night-shift cutoff (6 AM)
+# --- Settings ---
+SHEET_NAME = "turnover_log"      # Rename your sheet tab OR set to "Sheet1"
+CUTOFF_HOUR = 6                  # Night shift cutoff (6 AM)
 TZ = pytz.timezone("America/New_York")
 
-# ================== Auth (uses Streamlit secrets) ==================
+# --- Google Auth ---
 creds = Credentials.from_service_account_info(
     st.secrets["gcp_service_account"],
     scopes=[
@@ -28,20 +25,17 @@ creds = Credentials.from_service_account_info(
 )
 client = gspread.authorize(creds)
 
-# Run a silent health check (shows a red banner only if broken)
+# --- Config Check (quiet if OK) ---
 sheet_url = check_config(client, sheet_name=SHEET_NAME)
 sheet = client.open_by_url(sheet_url).worksheet(SHEET_NAME)
 
-# ================== Helpers ==================
+# --- Helpers ---
 def shift_today():
     now = datetime.now(TZ)
-    if now.hour < CUTOFF_HOUR:
-        return (now - timedelta(days=1)).date().isoformat()
-    return now.date().isoformat()
+    return (now - timedelta(days=1)).date().isoformat() if now.hour < CUTOFF_HOUR else now.date().isoformat()
 
 def ensure_header():
-    values = sheet.get_all_values()
-    if not values:
+    if not sheet.get_all_values():
         sheet.append_row(["Date", "WO Number", "Title", "Resolution"])
 
 def load_df():
@@ -50,23 +44,18 @@ def load_df():
     return pd.DataFrame(data, columns=["Date", "WO Number", "Title", "Resolution"])
 
 def save_row(date_str, wo, title, resolution):
-    """
-    Add a new row for today's date OR update the existing row with the same WO.
-    - Title only overwritten if provided (non-empty).
-    - Resolution can be blank (we don't invent text).
-    """
+    """Add new or update today’s row with same WO."""
     df = load_df()
     mask = (df["Date"] == date_str) & (df["WO Number"].astype(str) == str(wo))
     if mask.any():
-        idx = df[mask].index[0]  # 0-based
-        row_num = idx + 2        # +1 header row, +1 for 1-based indexing
+        idx = df[mask].index[0]
+        row_num = idx + 2  # +1 header, +1 1-based rows
         if str(title).strip():
             sheet.update_cell(row_num, 3, title)
         sheet.update_cell(row_num, 4, resolution)
         return "updated"
-    else:
-        sheet.append_row([date_str, wo, title, resolution])
-        return "added"
+    sheet.append_row([date_str, wo, title, resolution])
+    return "added"
 
 def numeric_sort_wo(df):
     def num(x):
@@ -74,14 +63,13 @@ def numeric_sort_wo(df):
             return int(str(x).replace("WO", ""))
         except:
             return 0
-    if not df.empty:
-        df = df.copy()
-        df["WO Sort"] = df["WO Number"].apply(num)
-        df = df.sort_values("WO Sort").drop(columns=["WO Sort"])
-    return df
+    if df.empty: 
+        return df
+    df = df.copy()
+    df["WO Sort"] = df["WO Number"].apply(num)
+    return df.sort_values("WO Sort").drop(columns=["WO Sort"])
 
-# ================== UI ==================
-st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
+# --- UI ---
 st.title("Turnover Notes Tracker (Web)")
 
 today = shift_today()
@@ -92,17 +80,16 @@ tab_input, tab_today, tab_search, tab_export = st.tabs(
     ["➕ Add/Update", "📅 Today", "🔎 Search", "📤 Export"]
 )
 
-# ---------- Add/Update (with dropdown of today's WOs) ----------
+# Add/Update (with dropdown of today's WOs)
 with tab_input:
     st.subheader(f"Add or Update (Shift date: **{today}**, cutoff {CUTOFF_HOUR:02d}:00 {TZ.zone})")
-
     left, right = st.columns([1, 2])
 
     with left:
         options = ["— Select a WO from today —"] + [
             f"WO{row['WO Number']} — {row['Title']}" for _, row in df_today.iterrows()
         ]
-        sel = st.selectbox("Pick today’s WO (optional) to auto-fill:", options, index=0, key="selected_label")
+        sel = st.selectbox("Pick today’s WO to auto-fill (optional):", options, index=0, key="selected_label")
 
         def parse_selected(s):
             if s.startswith("WO") and " — " in s:
@@ -112,7 +99,6 @@ with tab_input:
 
         if sel != "— Select a WO from today —":
             wo_prefill, title_prefill = parse_selected(sel)
-            # fetch existing resolution (if any)
             res_prefill = ""
             mask = (df_today["WO Number"].astype(str) == wo_prefill)
             if mask.any():
@@ -132,21 +118,18 @@ with tab_input:
             if wo.strip() and title_in.strip():
                 status = save_row(today, wo.strip(), title_in.strip(), res_in.strip())
                 st.success(f"WO{wo} {status}.")
-                # force-refresh the page state
                 st.rerun()
             else:
                 st.error("WO Number and Title are required.")
-
     with c2:
         if st.button("Clear fields"):
             st.session_state.selected_label = "— Select a WO from today —"
             st.rerun()
-
     with c3:
         if st.button("Refresh list"):
             st.rerun()
 
-# ---------- Today ----------
+# Today
 with tab_today:
     st.subheader(f"Today’s WOs — {today}")
     if df_today.empty:
@@ -154,7 +137,7 @@ with tab_today:
     else:
         st.dataframe(df_today.fillna(""), use_container_width=True)
 
-# ---------- Search ----------
+# Search
 with tab_search:
     st.subheader("Search by Title / Resolution")
     q = st.text_input("Search text", placeholder="e.g., PDS 3091")
@@ -175,18 +158,16 @@ with tab_search:
         else:
             st.dataframe(numeric_sort_wo(hits), use_container_width=True)
 
-# ---------- Export ----------
+# Export
 with tab_export:
     st.subheader("Export Today’s Turnover (plain text)")
     if df_today.empty:
         st.info("No entries to export yet.")
     else:
-        # Build text in your exact format:
         lines = [f"# {today}", "", "Daily PM completed, Rain curtain Filters cleaned.", ""]
         for _, r in df_today.iterrows():
             lines.append(f"- **WO{r['WO Number']} — {r['Title']}** | {r['Resolution']}")
         export_text = "\n".join(lines)
-
         st.code(export_text, language="markdown")
         st.download_button("Download as .txt", export_text, file_name=f"turnover_{today}.txt")
         st.caption("Tip: long-press/copy on your phone, or download and upload to OneDrive.")
