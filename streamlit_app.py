@@ -14,11 +14,11 @@ st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wid
 st.title("Turnover Notes")
 # --- SIMPLE WO ATTACHMENTS (OneDrive-backed) ---
 
+# --- SIMPLE WO ATTACHMENTS (OneDrive-backed) ---
 import pathlib, time
 import streamlit as st
 
-# Point uploads into OneDrive so they sync
-BASE_DIR = pathlib.Path.home() / "OneDrive"          # <- replace if your sync_dir is different
+BASE_DIR = pathlib.Path("/home/eduardo/OneDrive")   # <- your real sync_dir
 UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -39,38 +39,9 @@ def list_attachments(wo: str):
         return []
     return sorted(folder.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
 
-st.divider()
-st.subheader("Attach files to a Work Order (syncs to OneDrive)")
+st.caption(f"Uploads path → {UPLOAD_DIR}")  # shows exactly where files go
+# --- END ---
 
-wo_for_upload = st.text_input("WO number to attach to (e.g., 146720560)")
-files = st.file_uploader(
-    "Choose file(s)",
-    type=["jpg","jpeg","png","pdf","csv","xlsx","txt","mp4"],
-    accept_multiple_files=True
-)
-
-if wo_for_upload and files:
-    for f in files:
-        p = save_upload(f, wo_for_upload)
-        st.success(f"Saved {f.name} → {p}")
-
-st.divider()
-st.subheader("View attachments for an old WO")
-
-wo_search = st.text_input("Enter WO to view attachments", key="wo_search")
-if wo_search:
-    items = list_attachments(wo_search)
-    if not items:
-        st.info("No attachments found for that WO.")
-    else:
-        st.caption(f"{len(items)} file(s) found.")
-        for p in items:
-            name = p.name.lower()
-            if name.endswith((".jpg",".jpeg",".png")) and p.exists():
-                st.image(str(p), caption=p.name)
-            else:
-                st.write(f"• {p.name} — {p}")
-# --- END SIMPLE WO ATTACHMENTS ---
 
 # --- START upload section ---
 # Use your OneDrive path here. If your sync_dir is different, paste that exact path.
