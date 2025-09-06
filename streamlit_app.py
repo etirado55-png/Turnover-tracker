@@ -50,6 +50,40 @@ with tabs[1]:
         st.success(f"Photo saved to {path}")
         st.image(photo)
 # --- END upload section ---
+# ... your set_page_config + title + regular file_uploader code goes here ...
+
+# === Camera (opt-in) ===
+st.subheader("Optional: take a photo")
+enable_cam = st.toggle(
+    "Enable camera",
+    value=False,
+    help="Turn on only when you need it. Toggle off to release the camera."
+)
+
+# Use a placeholder so we can mount/unmount the widget
+cam_slot = st.empty()
+
+def save_upload(uploaded_file, subdir="camera"):
+    UPLOAD_DIR = pathlib.Path("uploads")
+    (UPLOAD_DIR / subdir).mkdir(parents=True, exist_ok=True)
+    ts = int(time.time() * 1000)
+    safe = uploaded_file.name.replace("/", "_")
+    out = UPLOAD_DIR / subdir / f"{ts}_{safe}"
+    with open(out, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return out
+
+if enable_cam:
+    photo = cam_slot.camera_input("Take a photo", key="photo_input")
+    if photo:
+        path = save_upload(photo)
+        st.success(f"Photo saved to {path}")
+        st.image(photo)
+else:
+    # Unmount the widget and clear any prior value
+    cam_slot.empty()
+    if "photo_input" in st.session_state:
+        del st.session_state["photo_input"]
 
 # --- Settings ---
 SHEET_NAME = "turnover_log"      # Rename your sheet tab OR set to "Sheet1"
