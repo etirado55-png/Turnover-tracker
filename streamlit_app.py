@@ -45,7 +45,7 @@ st.caption(f"Uploads path → {UPLOAD_DIR}")  # shows exactly where files go
 
 # --- START upload section ---
 # Use your OneDrive path here. If your sync_dir is different, paste that exact path.
-BASE_DIR = = /home/eduardo/OneDrive              # e.g., /home/you/OneDrive
+BASE_DIR = /home/eduardo/OneDrive              # e.g., /home/you/OneDrive
 UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"           # creates OneDrive/Turnover/uploads
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
