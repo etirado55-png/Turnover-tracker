@@ -34,4 +34,3 @@ def check_config(client, sheet_name="turnover_log"):
         st.stop()
 
     return url
-
