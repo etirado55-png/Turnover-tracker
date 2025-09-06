@@ -1,28 +1,46 @@
-# --- Imports ---
-import streamlit as st
-import pandas as pd
-from datetime import datetime, timedelta
-import pytz
-import gspread
+# streamlit_app.py  — Turnover Notes (attachments with OneDrive-or-local fallback)
+
+import os
+import time
+import tempfile
 import pathlib
-from google.oauth2.service_account import Credentials
-from bootstrap_helpers import get_sheet_url, check_config
+import streamlit as st
 
-# --- Page Config (must be first st.* call) ---
+# 1) Page setup
 st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
-
-# 3) Title
 st.title("Turnover Notes")
 
-# 4) >>> PATH SETUP — BASE_DIR goes here <<<
-BASE_DIR  = pathlib.Path("/home/eduardo/OneDrive")          # your real OneDrive path
-UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-st.caption(f"Attachments folder → {UPLOAD_DIR}")            # helps you verify
+# 2) Pick a writable uploads folder (tries OneDrive path on your PC, falls back elsewhere)
+def first_writable(paths):
+    for p in paths:
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            t = p / ".write_test"
+            t.write_text("ok", encoding="utf-8")
+            t.unlink(missing_ok=True)
+            return p
+        except Exception:
+            continue
+    raise RuntimeError("No writable upload directory found.")
 
-# 5) Helpers that use UPLOAD_DIR
-def save_upload(uploaded_file, wo: str):
-    folder = UPLOAD_DIR / str(wo).strip().replace("/", "_").replace("\\", "_")
+# If you ever move machines, just change the first candidate to your OneDrive path
+CANDIDATES = [
+    pathlib.Path("/home/eduardo/OneDrive/Turnover/uploads"),           # your Linux OneDrive
+    pathlib.Path.home() / "OneDrive" / "Turnover" / "uploads",         # alt OneDrive layout
+    pathlib.Path("/mount/data/uploads"),                                # Streamlit Cloud writable
+    pathlib.Path.cwd() / "uploads",                                     # repo folder (may be RO in cloud)
+    pathlib.Path(tempfile.gettempdir()) / "turnover_uploads",           # always-writable fallback
+]
+UPLOAD_DIR = first_writable(CANDIDATES)
+st.caption(f"Attachments folder → {UPLOAD_DIR}")
+
+# 3) Helpers
+def safe_wo(wo: str) -> str:
+    return str(wo).strip().replace("/", "_").replace("\\", "_")
+
+def save_upload(uploaded_file, wo: str) -> pathlib.Path:
+    """Save to UPLOAD_DIR/<WO>/timestamp_filename and return the path."""
+    folder = UPLOAD_DIR / safe_wo(wo)
     folder.mkdir(parents=True, exist_ok=True)
     ts = int(time.time() * 1000)
     safe_name = uploaded_file.name.replace("/", "_").replace("\\", "_")
@@ -32,148 +50,64 @@ def save_upload(uploaded_file, wo: str):
     return out_path
 
 def list_attachments(wo: str):
-    folder = UPLOAD_DIR / str(wo)
+    """Return newest-first list of Path objects under UPLOAD_DIR/<WO>."""
+    folder = UPLOAD_DIR / safe_wo(wo)
     if not folder.exists():
         return []
     return sorted(folder.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
 
-st.caption(f"Uploads path → {UPLOAD_DIR}")  # shows exactly where files go
-# --- END ---
+def is_image(path: pathlib.Path) -> bool:
+    return path.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
+# 4) UI — Attach files to a WO
+st.divider()
+st.subheader("Attach files to a Work Order")
 
-# --- START upload section ---
-# Use your OneDrive path here. If your sync_dir is different, paste that exact path.
-BASE_DIR = "/home/eduardo/OneDrive"              # e.g., /home/you/OneDrive
-UPLOAD_DIR = BASE_DIR / "Turnover" / "uploads"           # creates OneDrive/Turnover/uploads
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def save_upload(uploaded_file, subdir=""):
-    folder = UPLOAD_DIR / subdir if subdir else UPLOAD_DIR
-    folder.mkdir(parents=True, exist_ok=True)
-    timestamp = int(time.time() * 1000)
-    safe_name = uploaded_file.name.replace("/", "_")
-    out_path = folder / f"{timestamp}_{safe_name}"
-    with open(out_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return out_path
-
-tabs = st.tabs(["📤 Upload file(s)", "📷 Take a photo (iOS/Android/Desktop)"])
-
-with tabs[0]:
-    files = st.file_uploader(
-        "Choose file(s)",
-        type=["jpg", "jpeg", "png", "pdf", "csv", "xlsx"],
-        accept_multiple_files=True,
-        help="On iPhone/iPad, tap to pick from Photos or Files."
-    )
-    if files:
-        for f in files:
-            path = save_upload(f, subdir="user_uploads")
-            st.success(f"Saved {f.name} to {path}")
-            if f.type.startswith("image/"):
-                st.image(f, caption=f.name)
-
-with tabs[1]:
-    photo = st.camera_input("Take a photo")
-    if photo:
-        path = save_upload(photo, subdir="camera")
-        st.success(f"Photo saved to {path}")
-        st.image(photo)
-# --- END upload section ---
-# ... your set_page_config + title + regular file_uploader code goes here ...
-
-# === Camera (opt-in) ===
-st.subheader("Optional: take a photo")
-enable_cam = st.toggle(
-    "Enable camera",
-    value=False,
-    help="Turn on only when you need it. Toggle off to release the camera."
+wo_for_upload = st.text_input("WO number to attach to (e.g., 146720560)", key="wo_attach")
+files = st.file_uploader(
+    "Choose file(s)",
+    type=["jpg","jpeg","png","gif","webp","pdf","csv","xlsx","txt","mp4"],
+    accept_multiple_files=True
 )
 
-# Use a placeholder so we can mount/unmount the widget
-cam_slot = st.empty()
-
-def save_upload(uploaded_file, subdir="camera"):
-    UPLOAD_DIR = pathlib.Path("uploads")
-    (UPLOAD_DIR / subdir).mkdir(parents=True, exist_ok=True)
-    ts = int(time.time() * 1000)
-    safe = uploaded_file.name.replace("/", "_")
-    out = UPLOAD_DIR / subdir / f"{ts}_{safe}"
-    with open(out, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return out
-
-if enable_cam:
-    photo = cam_slot.camera_input("Take a photo", key="photo_input")
-    if photo:
-        path = save_upload(photo)
-        st.success(f"Photo saved to {path}")
-        st.image(photo)
-else:
-    # Unmount the widget and clear any prior value
-    cam_slot.empty()
-    if "photo_input" in st.session_state:
-        del st.session_state["photo_input"]
-
-# --- Settings ---
-SHEET_NAME = "turnover_log"      # Rename your sheet tab OR set to "Sheet1"
-CUTOFF_HOUR = 6                  # Night shift cutoff (6 AM)
-TZ = pytz.timezone("America/New_York")
-
-# --- Google Auth ---
-creds = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ],
-)
-client = gspread.authorize(creds)
-
-# --- Config Check (quiet if OK) ---
-sheet_url = check_config(client, sheet_name=SHEET_NAME)
-sheet = client.open_by_url(sheet_url).worksheet(SHEET_NAME)
-
-# --- Helpers ---
-def shift_today():
-    now = datetime.now(TZ)
-    return (now - timedelta(days=1)).date().isoformat() if now.hour < CUTOFF_HOUR else now.date().isoformat()
-
-def ensure_header():
-    if not sheet.get_all_values():
-        sheet.append_row(["Date", "WO Number", "Title", "Resolution"])
-
-def load_df():
-    ensure_header()
-    data = sheet.get_all_records()
-    return pd.DataFrame(data, columns=["Date", "WO Number", "Title", "Resolution"])
-
-def save_row(date_str, wo, title, resolution):
-    """Add new or update today’s row with same WO."""
-    df = load_df()
-    mask = (df["Date"] == date_str) & (df["WO Number"].astype(str) == str(wo))
-    if mask.any():
-        idx = df[mask].index[0]
-        row_num = idx + 2  # +1 header, +1 1-based rows
-        if str(title).strip():
-            sheet.update_cell(row_num, 3, title)
-        sheet.update_cell(row_num, 4, resolution)
-        return "updated"
-    sheet.append_row([date_str, wo, title, resolution])
-    return "added"
-
-def numeric_sort_wo(df):
-    def num(x):
+if wo_for_upload and files:
+    saved_ct = 0
+    for f in files:
         try:
-            return int(str(x).replace("WO", ""))
-        except:
-            return 0
-    if df.empty: 
-        return df
-    df = df.copy()
-    df["WO Sort"] = df["WO Number"].apply(num)
-    return df.sort_values("WO Sort").drop(columns=["WO Sort"])
+            p = save_upload(f, wo_for_upload)
+            saved_ct += 1
+            st.success(f"Saved {f.name} → {p}")
+        except Exception as e:
+            st.error(f"Failed to save {f.name}: {e}")
+    if saved_ct:
+        st.toast(f"Attached {saved_ct} file(s) to WO {wo_for_upload}", icon="✅")
+
+# 5) UI — View attachments for an old WO
+st.divider()
+st.subheader("View attachments for an old WO")
+
+wo_search = st.text_input("Enter WO to view attachments", key="wo_view")
+if wo_search:
+    items = list_attachments(wo_search)
+    if not items:
+        st.info("No attachments found for that WO.")
+    else:
+        st.caption(f"{len(items)} file(s) found for WO {safe_wo(wo_search)} (newest first).")
+        for p in items:
+            if is_image(p) and p.exists():
+                st.image(str(p), caption=p.name)
+            else:
+                st.write(f"• {p.name} — {p}")
+
+# 6) (Optional) Quick help
+with st.expander("Where do files go?"):
+    st.markdown(
+        f"""
+- **On your Linux PC**: uploads save under `{UPLOAD_DIR}` (and sync to OneDrive if that path is your OneDrive).
+- **On Streamlit Cloud**: uploads fall back to a local folder (ephemeral).
+- Each WO gets a subfolder: `…/uploads/WO_NUMBER/<timestamp>_filename.ext`.
+"""
+    )
 
 # --- UI ---
 st.title("Turnover Notes Tracker (Web)")
