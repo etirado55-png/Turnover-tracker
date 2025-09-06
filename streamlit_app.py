@@ -1,5 +1,7 @@
 import inspect, bootstrap_helpers
-st.caption(f"Loaded helper module: {inspect.getfile(bootstrap_helpers)}")
+import streamlit as st
+st.caption(f"Using helper file: {inspect.getfile(bootstrap_helpers)}")
+
 
 import streamlit as st
 import pandas as pd
