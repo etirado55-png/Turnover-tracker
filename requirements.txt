@@ -1,5 +1,6 @@
-streamlit==1.37.1
-pandas
-gspread
-google-auth
-pytz
+streamlit>=1.36
+pandas>=2.2
+gspread>=6.1
+google-auth>=2.34
+google-api-python-client>=2.141
+python-dateutil>=2.9
