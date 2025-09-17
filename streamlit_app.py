@@ -103,13 +103,13 @@ st.sidebar.button("Logout", on_click=logout, key="logout_btn")
 
 # ===================== Domain Constants =====================
 LOCATIONS = [
-    "Scene 1","Scene 2","Scene 3","Scene 4","Scene 5","Scene 6","Scene 7","Scene 8",
-    "World Celebration Gardens","Creations","Connections","CommuniCore Hall"
+    "JOW General","JOW Sc 1","JOW Sc 2","JOW Sc 3","JOW Sc 4","JOW Sc 5","JOW Sc 6","JOW Sc 7","JOW Sc 8",            #added more Locations 9/17/2025
+    "World Celebration Gardens","Creations","Connections","CommuniCore Hall","Benchwork"
 ]
 STATUSES = ["WIP", "Completed", "RTS", "WMATL"]
 
-STATUS_COLOR = {
-    "WIP": "#f7d774",
+STATUS_COLOR = {           #changed WIP to color Red 9/17/2025
+    "WIP": "#FF0000",
     "Completed": "#59c36a",
     "RTS": "#59c36a",
     "WMATL": "#5aa7ff"
@@ -263,6 +263,21 @@ def apply_filters(df0,
         out = out[safe_col(out, "Status").isin(status_filter)]
     return out
 
+def load_df(sheet_name: str):                       #added 9/17/2025
+    gc = get_gc()
+    sh = open_spreadsheet(sheet_name)
+    try:
+        ws = sh.worksheet(sheet_name)
+    except WorksheetNotFound:]
+        header_map = {
+            "WorkOrders": ["EntryID","WO","Title","Resolution","Status","Priority","Location","Scene","CreatedAt","UpdatedAt","AttachURL"],
+            "RFM":       ["EntryID","RFM","Title","Description","Status","Priority","Location","Scene","RequestedBy","CreatedAt","UpdatedAt","AttachURL"],
+        }
+        ws = sh.add_worksheet(title=sheet_name, rows=1000, cols=len(headers_map[sheet_name]))
+        ws.append_row(headers_map[sheet_name])
+    return pd.DataFrame(sh.worksheet(sheet_name).get_all_records())
+        
+
 # === QUICK EDIT HELPERS ===
 def _open_entries_ws_and_values():
     """Return worksheet and all values (including header)."""
@@ -363,11 +378,15 @@ def handle_submit():
 # ===================== UI =====================
 st.title("Turnover Notes")
 
+# Step 2: toggle right under the title added 9/17/2025
+is_rfm = st.toggle("RFM mode", value=False, help="Switch between Work Orders and Requests For Maintenance")
+sheet = "RFM" if is_rfm else "WorkOrders"
+
 # --- Left panel: Add WO Entry (sidebar) ---
 with st.sidebar:
-    st.header("Add New Work Order")
+    st.header("Add New" + ("RFM" if is_rfm else "Work Order"))
 
-    STATUS_OPTIONS = STATUSES          # ["WIP","Completed","RTS","WMATL"]
+    STATUS_OPTIONS = (STATUSES if not is_rfm else STATUSES + ["Submitted"])          # ["WIP","Completed","RTS","WMATL"]
     LOCATION_OPTIONS = LOCATIONS
 
     # Defaults (set once per run before widgets)
@@ -386,30 +405,32 @@ with st.sidebar:
         if level == "success" and st.session_state.get("toast_msg"):
             st.toast(st.session_state.pop("toast_msg"), icon="💾")
 
-    # Widgets: rely on keys only (no `value=` args)
+    # Widgets: rely on keys only (no `value=` args)    added 9/17/2025
     st.date_input("Date", key="wo_date")
-    st.text_input("Work Order Number", key="wo_number")
+    st.text_input("RFM Number" if is_rfm else "Work Order Number", key="wo_number")
     st.text_input("Title", key="wo_title")
     st.selectbox("Status", STATUS_OPTIONS, key="wo_status")
     st.selectbox("Location", LOCATION_OPTIONS, key="wo_location")
-    st.text_area(
-        "Resolution",
-        key="wo_resolution",
-        help="Optional for WIP/WMATL. Required for Completed/RTS."
-    )
+    st.text_area("Description" if is_rfm else "Resolution", key="wo_resolution",
+                 help=("Optional while Submitted/WIP" if is_rfm else
+                       "Optional for WIP/WMATL. Required for Completed/RTS."))
     st.text_input("Attachments (URLs, comma-separated; optional)", key="wo_attachments")
 
     col1, col2 = st.columns(2)
     with col1:
         # Submit via callback (safe to mutate widget state)
-        st.button("Submit", key="sidebar_addwo_submit_cb", on_click=handle_submit)
+        st.button("Submit", key="sidebar_addwo_submit_cb",
+                  on_click=handle_submit,
+                  kwargs={"sheet": sheet, "is_rfm": is_rfm})
     with col2:
         # Clear via callback
-        st.button("Clear", key="sidebar_addwo_clear_cb", on_click=reset_addwo)
-
+        st.button("Clear", key="sidebar_addwo_clear_cb",
+                  on_click=reset_addwo,
+                  kwargs={"is_rfm": is_rfm})
+        
 # --- Quick Edit Last Entry (by WO) ---
 st.sidebar.divider()
-st.sidebar.subheader("Edit Last Entry (by WO)")
+st.sidebar.subheader("Edit Last Entry (by " + ("RFM" if is_rfm else "WO") + ")")
 
 # Initialize session keys for persistent edit flow
 for k, v in {
@@ -420,21 +441,23 @@ for k, v in {
 }.items():
     st.session_state.setdefault(k, v)
 
-# Load form (enter a WO and load latest)
+# Load form (enter a WO and load latest)  added 9/17/2025
 with st.sidebar.form("edit_wo_form"):
-    edit_wo = st.text_input("WO # to edit", placeholder="e.g., 146720560").strip()
+    edit_label = "RFM # to edit" if is_rfm else "WO # to edit"
+    edit_wo = st.text_input(edit_label, placeholder="e.g., RFM-20250001" if is_rfm else "e.g., 146720560").strip()
     load_btn = st.form_submit_button("Load Last Entry", use_container_width=True)
 
 if load_btn and edit_wo:
-    rownum, rowdata = _latest_rownum_for_wo(edit_wo)
+    key_col = "RFM" if is_rfm else "WO"
+    rownum, rowdata = _latest_rownum_for_id(sheet, key_col, edit_wo)  # your finder should accept sheet+key
     if not rownum:
-        st.sidebar.error(f"WO{edit_wo} not found.")
+        st.sidebar.error(f"{key_col}{edit_wo} not found.")
     else:
         st.session_state.edit_loaded = True
         st.session_state.edit_rownum = rownum
         st.session_state.edit_rowdata = rowdata
         st.session_state.edit_wo_selected = edit_wo
-        st.sidebar.success(f"Loaded last entry for WO{edit_wo} (row {rownum})")
+        st.sidebar.success(f"Loaded last entry for {key_col}{edit_wo} (row {rownum})")
 
 # If loaded, show edit fields
 if st.session_state.edit_loaded and st.session_state.edit_rownum:
@@ -523,7 +546,8 @@ df = pd.DataFrame(columns=EXPECTED_HEADERS)
 try:
     if not SPREADSHEET_ID:
         raise RuntimeError("TURNOVER_SPREADSHEET_ID is not set in secrets or environment.")
-    df = load_df()
+    df = load_df(sheet)
+    st.dataframe(df, use_container_width=True)
 except APIError as e:
     detail = _explain_api_error(e)
     st.error("Google Sheets API error while opening the spreadsheet.")
