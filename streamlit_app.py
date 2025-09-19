@@ -268,7 +268,7 @@ def load_df(sheet_name: str):                       #added 9/17/2025
     sh = open_spreadsheet(sheet_name)
     try:
         ws = sh.worksheet(sheet_name)
-    except WorksheetNotFound:]
+    except WorksheetNotFound:
         header_map = {
             "WorkOrders": ["EntryID","WO","Title","Resolution","Status","Priority","Location","Scene","CreatedAt","UpdatedAt","AttachURL"],
             "RFM":       ["EntryID","RFM","Title","Description","Status","Priority","Location","Scene","RequestedBy","CreatedAt","UpdatedAt","AttachURL"],
