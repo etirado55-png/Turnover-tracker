@@ -492,8 +492,8 @@ if st.session_state.edit_loaded and st.session_state.edit_rownum:
         with col_b:
             cancel  = st.form_submit_button("Cancel", use_container_width=True)
         if confirm:
-    key_col = "RFM" if is_rfm else "WO"
-    edit_id = st.session_state.edit_wo_selected  # already set when you loaded the entry
+            key_col = "RFM" if is_rfm else "WO"
+            edit_id = st.session_state.edit_wo_selected  # already set when you loaded the entry
 
     ok = update_row(
         sheet_name=sheet,              # "RFM" or "WorkOrders" from the toggle
