@@ -473,7 +473,9 @@ if st.session_state.edit_loaded and st.session_state.edit_rownum:
 
     with st.sidebar.form("edit_wo_fields", clear_on_submit=False):
         new_title = st.text_area("Title", value=rowdata.get("Title",""), height=90, key=f"edit_title_{rownum}")
-        new_res   = st.text_area("Resolution", value=rowdata.get("Resolution",""), height=180, key=f"edit_res_{rownum}")
+        label = "Description" if is_rfm else "Resolution"
+        val   = rowdata.get("Description" if is_rfm else "Resolution", "")
+        new_res = st.text_area(label, value=val, height=180, key=f"edit_res_{rownum}")
         new_date  = st.date_input("Date", value=cur_date_val, key=f"edit_date_{rownum}")
 
         # Location/Status with safe defaults
@@ -489,6 +491,34 @@ if st.session_state.edit_loaded and st.session_state.edit_rownum:
             confirm = st.form_submit_button("Save Changes", use_container_width=True)
         with col_b:
             cancel  = st.form_submit_button("Cancel", use_container_width=True)
+        if confirm:
+    key_col = "RFM" if is_rfm else "WO"
+    edit_id = st.session_state.edit_wo_selected  # already set when you loaded the entry
+
+    ok = update_row(
+        sheet_name=sheet,              # "RFM" or "WorkOrders" from the toggle
+        key_col=key_col,               # "RFM" or "WO"
+        key_val=edit_id,               # the selected ID
+        updates={
+            "Title": new_title.strip(),
+            ("Description" if is_rfm else "Resolution"): new_res.strip(),
+            "Date": new_date.strftime("%Y-%m-%d"),
+            "Location": new_loc,
+            "Status": new_stat,
+            "Attachments": new_att,
+        },
+    )
+
+    if ok:
+        st.sidebar.success(f"Updated {key_col}{edit_id} (row {rownum}) ✅")
+        st.toast("Entry updated", icon="✏️")
+        st.session_state.edit_loaded = False
+        st.session_state.edit_rownum = None
+        st.session_state.edit_rowdata = {}
+        st.session_state.edit_wo_selected = ""
+        st.rerun()
+    else:
+        st.sidebar.error(f"{key_col}{edit_id} not found.")
 
     # Handle Cancel
     if cancel:
