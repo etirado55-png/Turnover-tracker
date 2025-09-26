@@ -50,7 +50,7 @@ if key:
 
 # Already authenticated in this session?
 if ss.get("user_email"):
-    return
+    st.stop()
 
 # Block everything else
 st.error("Access denied. Ask an admin for an access link.")
