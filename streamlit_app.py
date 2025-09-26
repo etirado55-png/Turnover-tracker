@@ -760,11 +760,11 @@ with st.sidebar.expander("➕ Add New " + ("RFM" if is_rfm else "Work Order"), e
 
     if is_editor:
         #render the input forms
-    if "flash" in st.session_state:
-        level, msg = st.session_state.pop("flash")
-        getattr(st, level)(msg)
-        if level == "success" and st.session_state.get("toast_msg"):
-            st.toast(st.session_state.pop("toast_msg"), icon="💾")
+        if "flash" in st.session_state:
+            level, msg = st.session_state.pop("flash")
+            getattr(st, level)(msg)
+            if level == "success" and st.session_state.get("toast_msg"):
+                st.toast(st.session_state.pop("toast_msg"), icon="💾")
 
     if is_rfm:
         st.caption("Material Att ROBLK004")   # only shows in RFM mode
