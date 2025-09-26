@@ -46,7 +46,7 @@ if key:
     if not row.empty:
         ss["user_email"] = row.iloc[0]["Email"]
         ss["user_role"] = str(row.iloc[0].get("Role","viewer")).lower()
-    return
+        st.stop()
 
 # Already authenticated in this session?
 if ss.get("user_email"):
