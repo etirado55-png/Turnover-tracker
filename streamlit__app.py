@@ -180,44 +180,109 @@ def _param_value(params, name: str) -> str:
         return ""
 
 def auth_gate() -> None:
+    import hmac
+
     ss = st.session_state
-    params  = _get_query_params()
+    params = _get_query_params()
     raw_key = _clean_spaces(_param_value(params, "key"))
-    if raw_key and ss.get("_last_auth_key") != raw_key:
-        try:
-            load_users_df.clear()
-        except Exception:
-            pass
-        ss["_last_auth_key"] = raw_key
+    test_key = _param_value(params, "test_key")
+
+    try:
+        bypass_secret = st.secrets.get("TEST_BYPASS_KEY", "")
+    except (FileNotFoundError, KeyError):
+        bypass_secret = ""
+
+    previous_identity = ss.get("_auth_identity")
+
+    # Stored session values never authorize access.
+    for name in (
+        "user_email", "user_role", "user_record",
+        "_auth_identity", "_auth_bypass",
+    ):
+        ss.pop(name, None)
+
+    # Validate the bypass before reading the Users sheet.
+    if (
+        isinstance(bypass_secret, str)
+        and bypass_secret
+        and isinstance(test_key, str)
+        and test_key
+        and hmac.compare_digest(
+            test_key.encode("utf-8"),
+            bypass_secret.encode("utf-8"),
+        )
+    ):
+        identity = ("test", _hash_token(test_key))
+        if previous_identity != identity:
+            ss.clear()
+
+        ss["user_email"] = "test-admin@local"
+        ss["user_role"] = "admin"
+        ss["user_record"] = {
+            "Email": "test-admin@local",
+            "Role": "admin",
+            "Enabled": True,
+            "Locations": "JOW, Mission Space",
+            "TokenHash": "",
+            "URL": "",
+        }
+        ss["_auth_identity"] = identity
+        ss["_auth_bypass"] = True
+        return
+
+    # No valid bypass and no normal key: deny immediately.
+    if not raw_key:
+        ss.clear()
+        st.error("Access Denied. Ask an admin for an access link.")
+        st.stop()
+
+    # Preserve normal Users-sheet authentication.
+    if ss.get("_last_auth_key") != raw_key:
+        load_users_df.clear()
+
     try:
         users = load_users_df()
     except Exception as e:
+        ss.clear()
         st.error(f"Cannot open Users sheet: {e}")
         st.stop()
-    th = users.get("TokenHash", pd.Series(dtype=str)).astype(str).map(_clean_spaces).str.lower()
-    en = users.get("Enabled",   pd.Series(dtype=str)).map(_truthy)
-    if ss.get("user_email") and not raw_key:
-        if "user_record" not in ss:
-            email = ss["user_email"].strip().lower()
-            row = users[users["Email"].astype(str).str.strip().str.lower() == email]
-            if not row.empty:
-                ss["user_record"] = row.iloc[0].to_dict()
-        return
-    if raw_key:
-        token_hash = _hash_token(raw_key)
-        match_mask = (th == token_hash) & en.fillna(False)
-        row = users[match_mask]
-        if not row.empty:
-            row0 = row.iloc[0].copy()
-            role_clean = _clean_role(row0.get("Role", "viewer"))
-            email_val  = _clean_spaces(row0.get("Email", "user@local"))
-            ss["user_email"]  = email_val
-            ss["user_role"]   = role_clean
-            ss["user_record"] = row0.to_dict()
-            return
-    st.error("Access denied. Ask an admin for an access link.")
-    st.stop()
 
+    token_hash = _hash_token(raw_key)
+    hashes = (
+        users.get("TokenHash", pd.Series(dtype=str))
+        .astype(str)
+        .map(_clean_spaces)
+        .str.lower()
+    )
+    enabled = (
+        users.get("Enabled", pd.Series(dtype=str))
+        .map(_truthy)
+        .fillna(False)
+    )
+    matches = users[(hashes == token_hash) & enabled]
+
+    if matches.empty:
+        ss.clear()
+        st.error("Access Denied. Ask an admin for an access link.")
+        st.stop()
+
+    record = matches.iloc[0].to_dict()
+    email = _clean_spaces(record.get("Email", "user@local"))
+    role = _clean_role(record.get("Role", "viewer"))
+    identity = (
+        "user", token_hash, email, role,
+        str(record.get("Locations", "")),
+    )
+
+    if previous_identity != identity:
+        ss.clear()
+
+    ss["user_email"] = email
+    ss["user_role"] = role
+    ss["user_record"] = record
+    ss["_last_auth_key"] = raw_key
+    ss["_auth_identity"] = identity
+    ss["_auth_bypass"] = False
 def is_admin() -> bool:
     return st.session_state.get("user_role") == "admin"
 
@@ -1236,7 +1301,13 @@ if st.button("🔄 Force Refresh Data", key="force_refresh_btn"):
     st.rerun()
 
 # ===================== ADMIN: Manage Users (sidebar) =====================
-if is_admin():
+if is_admin() and (
+    not st.session_state.get("_auth_bypass")
+    or st.sidebar.checkbox(
+        "Load Users management",
+        key="test_load_users_management",
+    )
+):
     with st.sidebar.expander("👤 Manage Users (Admin)", expanded=False):
 
         try:
