@@ -1592,16 +1592,68 @@ TA_FIELDS = (
 )
 
 
-def _ta_retrieve(wo_filtered, rfm_filtered, question, history=False):
-    """Pure local retrieval. Inputs must already be permission-scoped and filtered."""
+def _ta_retrieve(
+    wo_filtered,
+    rfm_filtered,
+    question,
+    history=False,
+    wo_history=None,
+    rfm_history=None,
+):
+    """Retrieve relevant rows locally and resolve each record's latest status."""
+    closed_statuses = {
+        "COMPLETED", "COMP", "CLOSED", "CLOSE",
+        "RTS", "DONE", "NOTE", "CANCL", "CANCELLED",
+    }
+
+    def latest_records(frame, id_column):
+        """One newest record per WO/RFM from the complete scoped history."""
+        if frame is None or frame.empty or id_column not in frame.columns:
+            return pd.DataFrame()
+
+        latest = frame.copy()
+        latest = latest[
+            latest[id_column].fillna("").astype(str).str.strip().ne("")
+        ].copy()
+
+        latest["__ts"] = _parse_ts(latest)
+        latest["__created_sort"] = (
+            latest["CreatedAt"].fillna("").astype(str).str.strip()
+            if "CreatedAt" in latest.columns
+            else ""
+        )
+
+        return (
+            latest.sort_values(
+                ["__ts", "__created_sort"],
+                ascending=[True, True],
+                kind="stable",
+                na_position="first",
+            )
+            .groupby(id_column, as_index=False, sort=False)
+            .tail(1)
+            .set_index(id_column)
+        )
+
+    latest_wo = latest_records(wo_history, "WO")
+    latest_rfm = latest_records(rfm_history, "RFM")
+
     frames = []
-    for kind, frame in (("WO", wo_filtered), ("RFM", rfm_filtered)):
-        if frame is None or frame.empty or kind not in frame.columns:
+
+    for kind, frame, latest in (
+        ("WO", wo_filtered, latest_wo),
+        ("RFM", rfm_filtered, latest_rfm),
+    ):
+        id_column = kind
+
+        if frame is None or frame.empty or id_column not in frame.columns:
             continue
 
+        # These are the rows that match the user's question/filter.
+        # Keep their Bay/Capsule/title information.
         part = frame.copy().reset_index(drop=True)
         part = part[
-            part[kind].fillna("").astype(str).str.strip().ne("")
+            part[id_column].fillna("").astype(str).str.strip().ne("")
         ].copy()
 
         part["__sort"] = _parse_ts(part)
@@ -1612,77 +1664,154 @@ def _ta_retrieve(wo_filtered, rfm_filtered, question, history=False):
             na_position="last",
         )
 
-        # Default assistant mode: one latest record per WO/RFM.
-        # History mode deliberately keeps the older events.
-        if not history:
-            part = part.drop_duplicates(kind, keep="first")
-
-        # Make the status obvious to the AI and the visible source rows.
-        if "Status" in part.columns:
-            closed_statuses = {
-                "COMPLETED", "COMP", "CLOSED", "CLOSE",
-                "RTS", "DONE", "NOTE", "CANCL", "CANCELLED",
-            }
-            status = part["Status"].fillna("").astype(str).str.strip().str.upper()
-            part["CurrentState"] = status.apply(
-                lambda value: "Closed" if value in closed_statuses else "Open"
+        # Resolve the true current status from the complete site-scoped history.
+        if not latest.empty:
+            current_status = (
+                part[id_column].map(latest["Status"])
+                if "Status" in latest.columns
+                else pd.Series("", index=part.index)
+            )
+            current_date = (
+                part[id_column].map(latest["Date"])
+                if "Date" in latest.columns
+                else pd.Series("", index=part.index)
             )
 
-        keep = [c for c in TA_FIELDS if c in part.columns]
+            part["Status"] = current_status.fillna(
+                part.get("Status", "")
+            ).astype(str).str.strip()
+
+            part["LatestUpdate"] = current_date.fillna("").astype(str).str.strip()
+        else:
+            part["Status"] = part.get("Status", "").fillna("").astype(str).str.strip()
+            part["LatestUpdate"] = ""
+
+        status = part["Status"].str.upper()
+        part["CurrentState"] = status.apply(
+            lambda value: "Closed" if value in closed_statuses else "Open"
+        )
+
+        # Default: one relevant row per WO/RFM.
+        # History mode intentionally keeps all matching events.
+        if not history:
+            part = part.drop_duplicates(id_column, keep="first")
+
+        keep = list(
+            dict.fromkeys(
+                [c for c in TA_FIELDS if c in part.columns]
+                + [
+                    c for c in ("CurrentState", "LatestUpdate")
+                    if c in part.columns
+                ]
+            )
+        )
 
         part = part[keep].copy()
         part.insert(0, "Type", kind)
         frames.append(part)
+
     if not frames:
-        return [], {"available_rows": 0, "matched_rows": 0, "sent_rows": 0}
+        return [], {
+            "available_rows": 0,
+            "matched_rows": 0,
+            "sent_rows": 0,
+        }
+
     pool = pd.concat(frames, ignore_index=True).fillna("").astype(str)
     available = len(pool)
     q = question.lower().strip()
-    # Explicit record identifiers are hard constraints, never fuzzy fallbacks.
+
     ids = re.findall(r"\b(wo|rfm)\s*#?\s*([0-9]+)\b", q)
+
     if ids:
         mask = pd.Series(False, index=pool.index)
+
         for kind, number in ids:
-            col = kind.upper()
-            if col in pool:
-                normalized = pool[col].str.upper().str.replace(r"^(WO|RFM)\s*#?\s*", "", regex=True)
-                mask |= pool["Type"].eq(col) & normalized.eq(number)
+            id_column = kind.upper()
+
+            if id_column in pool:
+                normalized = pool[id_column].str.upper().str.replace(
+                    r"^(WO|RFM)\s*#?\s*",
+                    "",
+                    regex=True,
+                )
+                mask |= pool["Type"].eq(id_column) & normalized.eq(number)
+
         pool = pool[mask]
         q = re.sub(r"\b(wo|rfm)\s*#?\s*[0-9]+\b", "", q)
+
     elif re.search(r"\brfms?\b", q) and not re.search(r"\bwos?\b", q):
         pool = pool[pool["Type"].eq("RFM")]
+
     elif re.search(r"\bwos?\b", q) and not re.search(r"\brfms?\b", q):
         pool = pool[pool["Type"].eq("WO")]
-    if "Status" in pool:
-        statuses = pool["Status"].str.strip().str.upper()
-        closed = statuses.isin({"COMPLETED", "COMP", "CLOSED", "CLOSE", "RTS", "DONE", "NOTE", "CANCL", "CANCELLED"})
+
+    if "CurrentState" in pool.columns:
         if re.search(r"\bopen\b", q):
-            pool = pool[~closed]
+            pool = pool[pool["CurrentState"].eq("Open")]
             q = re.sub(r"\bopen\b", "", q)
+
         elif re.search(r"\b(completed|closed)\b", q):
-            pool = pool[closed]
+            pool = pool[pool["CurrentState"].eq("Closed")]
             q = re.sub(r"\b(completed|closed)\b", "", q)
-    stop = set("a an the is are was were be been of to for in on at and or with about me show tell give list summarize summary please what which how many all any wo wos rfm rfms work order orders status latest current history resolution description happened update updates this that these those it its have has do does can you i my we our".split())
-    terms = [t for t in re.findall(r"[a-z0-9]+", q) if t not in stop]
-    # Exact ID questions return that record even when conversational words differ.
+
+    stop = set(
+        "a an the is are was were be been of to for in on at and or with "
+        "about me show tell give list summarize summary please what which "
+        "how many all any wo wos rfm rfms work order orders status latest "
+        "current history resolution description happened update updates "
+        "this that these those it its have has do does can you i my we our"
+        .split()
+    )
+
+    terms = [
+        term for term in re.findall(r"[a-z0-9]+", q)
+        if term not in stop
+    ]
+
     if terms and not ids and not pool.empty:
-        text_rows = pool.apply(lambda r: " ".join(r).lower(), axis=1)
+        text_rows = pool.apply(lambda row: " ".join(row).lower(), axis=1)
         score = pd.Series(0, index=pool.index)
+
         for term in set(terms):
-            score += text_rows.str.contains(r"\b" + re.escape(term) + r"\b", regex=True).astype(int)
-        pool = pool.loc[score[score > 0].sort_values(ascending=False, kind="stable").index]
+            score += text_rows.str.contains(
+                r"\b" + re.escape(term) + r"\b",
+                regex=True,
+            ).astype(int)
+
+        pool = pool.loc[
+            score[score > 0].sort_values(
+                ascending=False,
+                kind="stable",
+            ).index
+        ]
+
     matched = len(pool)
     records = []
+
     for _, row in pool.head(TA_MAX_ROWS).iterrows():
         record = {"Source": f"S{len(records) + 1}"}
+
         for key, value in row.items():
             if value:
-                record[key] = value if len(value) <= TA_CELL_CHARS else value[:TA_CELL_CHARS] + " [truncated]"
-        if len(json.dumps(records + [record], ensure_ascii=False).encode("utf-8")) > TA_CONTEXT_BYTES:
-            break
-        records.append(record)
-    return records, {"available_rows": available, "matched_rows": matched, "sent_rows": len(records)}
+                record[key] = (
+                    value
+                    if len(value) <= TA_CELL_CHARS
+                    else value[:TA_CELL_CHARS] + " [truncated]"
+                )
 
+        if len(
+            json.dumps(records + [record], ensure_ascii=False).encode("utf-8")
+        ) > TA_CONTEXT_BYTES:
+            break
+
+        records.append(record)
+
+    return records, {
+        "available_rows": available,
+        "matched_rows": matched,
+        "sent_rows": len(records),
+    }
 
 def _ta_answer(question, records, coverage, model, api_key):
     # Standard library HTTP keeps this optional feature dependency-free.
@@ -1753,7 +1882,14 @@ def render_turnover_assistant(wo_filtered, rfm_filtered, scope):
     if not submitted or not question.strip():
         return
     question = question.strip()[:TA_QUESTION_CHARS]
-    records, coverage = _ta_retrieve(wo_filtered, rfm_filtered, question, history)
+    records, coverage = _ta_retrieve(
+    wo_filtered,
+    rfm_filtered,
+    question,
+    history,
+    wo_history=df_scoped,
+    rfm_history=rfm_df_scoped,
+)
     coverage["mode"] = "history" if history else "latest within filters"
     if not records:
         answer = "No relevant rows found within the active filters. Try a WO/RFM number, a specific keyword, or adjust the filters."
@@ -2674,10 +2810,24 @@ if current_tab == TAB_NAME:
         if selected:
             assistant_wo = assistant_wo[assistant_wo[column].fillna("").astype(str).str.strip().eq(selected)] if column in assistant_wo else assistant_wo.iloc[0:0]
             assistant_rfm = assistant_rfm[assistant_rfm[column].fillna("").astype(str).str.strip().eq(selected)] if column in assistant_rfm else assistant_rfm.iloc[0:0]
-    render_turnover_assistant(
-        assistant_wo, assistant_rfm,
-        (current_loc(), str(user_locs), QUERY_TEXT, SEARCH_MODE, start, end, loc_mult, status_mult, sel_filter_bay, sel_filter_cap),
-    )
+  render_turnover_assistant(
+    assistant_wo,
+    assistant_rfm,
+    (
+        current_loc(),
+        str(user_locs),
+        QUERY_TEXT,
+        SEARCH_MODE,
+        start,
+        end,
+        loc_mult,
+        status_mult,
+        sel_filter_bay,
+        sel_filter_cap,
+    ),
+    df_scoped,
+    rfm_df_scoped,
+)
 
     # ===================== Debug info (Entries scope) =====================
     with st.expander("Debug info", expanded=False):
