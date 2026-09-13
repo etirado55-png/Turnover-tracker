@@ -1629,8 +1629,6 @@ def _ta_retrieve(wo_filtered, rfm_filtered, question, history=False):
             )
 
         keep = [c for c in TA_FIELDS if c in part.columns]
-        if "CurrentState" in part.columns:
-            keep.append("CurrentState")
 
         part = part[keep].copy()
         part.insert(0, "Type", kind)
