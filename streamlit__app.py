@@ -1916,8 +1916,8 @@ def render_turnover_assistant(
                 )
 
     with st.expander("Source rows — exact AI context"):
-    api_key = str(st.secrets.get("OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")).strip()
-    model = str(st.secrets.get("TURNOVER_AI_MODEL", "") or os.getenv("TURNOVER_AI_MODEL", "gpt-4.1-mini")).strip()
+        api_key = str(st.secrets.get("OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")).strip()
+        model = str(st.secrets.get("TURNOVER_AI_MODEL", "") or os.getenv("TURNOVER_AI_MODEL", "gpt-4.1-mini")).strip()
     if not api_key:
         st.info("AI answers require OPENAI_API_KEY in Streamlit secrets. You can still search and inspect source rows below.")
     with st.form("ta_question_form", clear_on_submit=True):
