@@ -1718,8 +1718,8 @@ def _ta_retrieve(
         }
 
         if not records:
-        requested_bay = coverage.get("requested_bay", "")
-        requested_state = coverage.get("requested_state", "")
+            requested_bay = coverage.get("requested_bay", "")
+            requested_state = coverage.get("requested_state", "")
 
         if requested_bay and requested_state == "Open":
             answer = (
