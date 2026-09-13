@@ -1585,8 +1585,11 @@ TA_MAX_ROWS = 20
 TA_CONTEXT_BYTES = 24000
 TA_CELL_CHARS = 1200
 TA_QUESTION_CHARS = 1000
-TA_FIELDS = ("WO", "RFM", "Title", "Resolution", "Description", "Date", "Status",
-             "Location", "Bay", "Capsule", "CapsuleID", "AssignedTo")
+TA_FIELDS = (
+    "WO", "RFM", "Title", "Resolution", "Description",
+    "Date", "Status", "CurrentState", "Location",
+    "Bay", "Capsule", "CapsuleID", "AssignedTo",
+)
 
 
 def _ta_retrieve(wo_filtered, rfm_filtered, question, history=False):
@@ -1595,13 +1598,41 @@ def _ta_retrieve(wo_filtered, rfm_filtered, question, history=False):
     for kind, frame in (("WO", wo_filtered), ("RFM", rfm_filtered)):
         if frame is None or frame.empty or kind not in frame.columns:
             continue
+
         part = frame.copy().reset_index(drop=True)
-        part = part[part[kind].fillna("").astype(str).str.strip().ne("")]
+        part = part[
+            part[kind].fillna("").astype(str).str.strip().ne("")
+        ].copy()
+
         part["__sort"] = _parse_ts(part)
-        part = part.sort_values("__sort", ascending=False, kind="stable", na_position="last")
+        part = part.sort_values(
+            "__sort",
+            ascending=False,
+            kind="stable",
+            na_position="last",
+        )
+
+        # Default assistant mode: one latest record per WO/RFM.
+        # History mode deliberately keeps the older events.
         if not history:
             part = part.drop_duplicates(kind, keep="first")
-        part = part[[c for c in TA_FIELDS if c in part.columns]].copy()
+
+        # Make the status obvious to the AI and the visible source rows.
+        if "Status" in part.columns:
+            closed_statuses = {
+                "COMPLETED", "COMP", "CLOSED", "CLOSE",
+                "RTS", "DONE", "NOTE", "CANCL", "CANCELLED",
+            }
+            status = part["Status"].fillna("").astype(str).str.strip().str.upper()
+            part["CurrentState"] = status.apply(
+                lambda value: "Closed" if value in closed_statuses else "Open"
+            )
+
+        keep = [c for c in TA_FIELDS if c in part.columns]
+        if "CurrentState" in part.columns:
+            keep.append("CurrentState")
+
+        part = part[keep].copy()
         part.insert(0, "Type", kind)
         frames.append(part)
     if not frames:
