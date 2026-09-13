@@ -237,27 +237,25 @@ def auth_gate() -> None:
     ss = st.session_state
     params = _get_query_params()
 
-    # ===================== TEST APP BYPASS =====================
+    # ===================== TEST BYPASS =====================
     test_key = _clean_spaces(_param_value(params, "test_key"))
     test_secret = _clean_spaces(st.secrets.get("TEST_BYPASS_KEY", ""))
 
-    # Only works if TEST_BYPASS_KEY actually exists in Streamlit Secrets
-    if test_secret and test_key and test_key == test_secret:
-        ss["user_email"] = "test@local"
+    if test_secret and test_key == test_secret:
+        ss["user_email"] = "test-admin@local"
         ss["user_role"] = "admin"
         ss["user_record"] = {
-            "Email": "test@local",
+            "Email": "test-admin@local",
             "Role": "admin",
             "Enabled": True,
             "TokenHash": "",
-            "Locations": "Mission Space,JOW",
+            "Locations": "JOW,Mission Space",
             "URL": "",
         }
+        ss["_auth_mode"] = "test"
         return
-    # =========================================================
 
-
-    # Normal user authentication
+    # ===================== NORMAL USER KEY =====================
     raw_key = _clean_spaces(_param_value(params, "key"))
 
     if raw_key and ss.get("_last_auth_key") != raw_key:
@@ -267,44 +265,58 @@ def auth_gate() -> None:
             pass
         ss["_last_auth_key"] = raw_key
 
-    try:
-        users = load_users_df()
-    except Exception as e:
-        st.error(f"Cannot open Users sheet: {e}")
-        st.stop()
-
-    th = users.get(
-        "TokenHash", pd.Series(dtype=str)
-    ).astype(str).map(_clean_spaces).str.lower()
-
-    en = users.get(
-        "Enabled", pd.Series(dtype=str)
-    ).map(_truthy)
-
-    if ss.get("user_email") and not raw_key:
-        if "user_record" not in ss:
-            email = ss["user_email"].strip().lower()
-            row = users[
-                users["Email"].astype(str).str.strip().str.lower() == email
-            ]
-            if not row.empty:
-                ss["user_record"] = row.iloc[0].to_dict()
-        return
-
     if raw_key:
+        try:
+            users = load_users_df()
+        except Exception as e:
+            st.error(f"Cannot open Users sheet: {e}")
+            st.stop()
+
+        th = (
+            users.get("TokenHash", pd.Series(dtype=str))
+            .astype(str)
+            .map(_clean_spaces)
+            .str.lower()
+        )
+
+        en = users.get(
+            "Enabled",
+            pd.Series(dtype=str)
+        ).map(_truthy)
+
         token_hash = _hash_token(raw_key)
         match_mask = (th == token_hash) & en.fillna(False)
         row = users[match_mask]
 
         if not row.empty:
             row0 = row.iloc[0].copy()
-            role_clean = _clean_role(row0.get("Role", "viewer"))
-            email_val = _clean_spaces(row0.get("Email", "user@local"))
+
+            role_clean = _clean_role(
+                row0.get("Role", "viewer")
+            )
+
+            email_val = _clean_spaces(
+                row0.get("Email", "user@local")
+            )
 
             ss["user_email"] = email_val
             ss["user_role"] = role_clean
             ss["user_record"] = row0.to_dict()
+            ss["_auth_mode"] = "user"
+
             return
+
+    # ===================== NO VALID KEY =====================
+    # Remove any old authenticated session
+    for k in [
+        "user_email",
+        "user_role",
+        "user_record",
+        "_auth_mode",
+        "_last_auth_key",
+        "current_loc",
+    ]:
+        ss.pop(k, None)
 
     st.error("Access denied. Ask an admin for an access link.")
     st.stop()
