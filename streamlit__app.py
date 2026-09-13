@@ -2810,24 +2810,24 @@ if current_tab == TAB_NAME:
         if selected:
             assistant_wo = assistant_wo[assistant_wo[column].fillna("").astype(str).str.strip().eq(selected)] if column in assistant_wo else assistant_wo.iloc[0:0]
             assistant_rfm = assistant_rfm[assistant_rfm[column].fillna("").astype(str).str.strip().eq(selected)] if column in assistant_rfm else assistant_rfm.iloc[0:0]
-  render_turnover_assistant(
-    assistant_wo,
-    assistant_rfm,
-    (
-        current_loc(),
-        str(user_locs),
-        QUERY_TEXT,
-        SEARCH_MODE,
-        start,
-        end,
-        loc_mult,
-        status_mult,
-        sel_filter_bay,
-        sel_filter_cap,
-    ),
-    df_scoped,
-    rfm_df_scoped,
-)
+      render_turnover_assistant(
+        assistant_wo,
+        assistant_rfm,
+        (
+            current_loc(),
+            str(user_locs),
+            QUERY_TEXT,
+            SEARCH_MODE,
+            start,
+            end,
+            loc_mult,
+            status_mult,
+            sel_filter_bay,
+            sel_filter_cap,
+        ),
+        df_scoped,
+        rfm_df_scoped,
+    )
 
     # ===================== Debug info (Entries scope) =====================
     with st.expander("Debug info", expanded=False):
