@@ -1717,101 +1717,25 @@ def _ta_retrieve(
             "sent_rows": 0,
         }
 
-    pool = pd.concat(frames, ignore_index=True).fillna("").astype(str)
-    available = len(pool)
-    q = question.lower().strip()
+        if not records:
+        requested_bay = coverage.get("requested_bay", "")
+        requested_state = coverage.get("requested_state", "")
 
-    ids = re.findall(r"\b(wo|rfm)\s*#?\s*([0-9]+)\b", q)
-
-    if ids:
-        mask = pd.Series(False, index=pool.index)
-
-        for kind, number in ids:
-            id_column = kind.upper()
-
-            if id_column in pool:
-                normalized = pool[id_column].str.upper().str.replace(
-                    r"^(WO|RFM)\s*#?\s*",
-                    "",
-                    regex=True,
-                )
-                mask |= pool["Type"].eq(id_column) & normalized.eq(number)
-
-        pool = pool[mask]
-        q = re.sub(r"\b(wo|rfm)\s*#?\s*[0-9]+\b", "", q)
-
-    elif re.search(r"\brfms?\b", q) and not re.search(r"\bwos?\b", q):
-        pool = pool[pool["Type"].eq("RFM")]
-
-    elif re.search(r"\bwos?\b", q) and not re.search(r"\brfms?\b", q):
-        pool = pool[pool["Type"].eq("WO")]
-
-    if "CurrentState" in pool.columns:
-        if re.search(r"\bopen\b", q):
-            pool = pool[pool["CurrentState"].eq("Open")]
-            q = re.sub(r"\bopen\b", "", q)
-
-        elif re.search(r"\b(completed|closed)\b", q):
-            pool = pool[pool["CurrentState"].eq("Closed")]
-            q = re.sub(r"\b(completed|closed)\b", "", q)
-
-    stop = set(
-        "a an the is are was were be been of to for in on at and or with "
-        "about me show tell give list summarize summary please what which "
-        "how many all any wo wos rfm rfms work order orders status latest "
-        "current history resolution description happened update updates "
-        "this that these those it its have has do does can you i my we our"
-        .split()
-    )
-
-    terms = [
-        term for term in re.findall(r"[a-z0-9]+", q)
-        if term not in stop
-    ]
-
-    if terms and not ids and not pool.empty:
-        text_rows = pool.apply(lambda row: " ".join(row).lower(), axis=1)
-        score = pd.Series(0, index=pool.index)
-
-        for term in set(terms):
-            score += text_rows.str.contains(
-                r"\b" + re.escape(term) + r"\b",
-                regex=True,
-            ).astype(int)
-
-        pool = pool.loc[
-            score[score > 0].sort_values(
-                ascending=False,
-                kind="stable",
-            ).index
-        ]
-
-    matched = len(pool)
-    records = []
-
-    for _, row in pool.head(TA_MAX_ROWS).iterrows():
-        record = {"Source": f"S{len(records) + 1}"}
-
-        for key, value in row.items():
-            if value:
-                record[key] = (
-                    value
-                    if len(value) <= TA_CELL_CHARS
-                    else value[:TA_CELL_CHARS] + " [truncated]"
-                )
-
-        if len(
-            json.dumps(records + [record], ensure_ascii=False).encode("utf-8")
-        ) > TA_CONTEXT_BYTES:
-            break
-
-        records.append(record)
-
-    return records, {
-        "available_rows": available,
-        "matched_rows": matched,
-        "sent_rows": len(records),
-    }
+        if requested_bay and requested_state == "Open":
+            answer = (
+                f"✅ No open work orders found for {requested_bay} "
+                "within the active filters."
+            )
+        elif requested_bay and requested_state == "Closed":
+            answer = (
+                f"No closed work orders found for {requested_bay} "
+                "within the active filters."
+            )
+        else:
+            answer = (
+                "No relevant rows found within the active filters. "
+                "Try a WO/RFM number, a specific keyword, or adjust the filters."
+            )
 
 def _ta_answer(question, records, coverage, model, api_key):
     # Standard library HTTP keeps this optional feature dependency-free.
