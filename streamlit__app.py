@@ -1873,10 +1873,64 @@ def render_turnover_assistant(
         with st.chat_message("user"):
             st.write(message["question"])
         with st.chat_message("assistant"):
-            st.write(message["answer"])
-            with st.expander("Source rows — exact AI context"):
-                st.caption(message["coverage"])
-                st.dataframe(pd.DataFrame(message["rows"]), hide_index=True, use_container_width=True)
+    st.write(message["answer"])
+
+    states = {
+        str(row.get("CurrentState", "")).strip().upper()
+        for row in message["rows"]
+        if str(row.get("CurrentState", "")).strip()
+    }
+
+    if states == {"CLOSED"}:
+        st.markdown(
+            """
+            <span style="
+                display:inline-block;
+                margin-top:.35rem;
+                padding:.25rem .65rem;
+                border-radius:999px;
+                background:#16803c;
+                color:white;
+                font-weight:700;
+                font-size:.8rem;
+            ">✓ ALL MATCHING WOs CLOSED</span>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif "OPEN" in states and "CLOSED" in states:
+        st.markdown(
+            """
+            <span style="
+                display:inline-block;
+                margin-top:.35rem;
+                padding:.25rem .65rem;
+                border-radius:999px;
+                background:#d97706;
+                color:white;
+                font-weight:700;
+                font-size:.8rem;
+            ">MIXED — OPEN AND CLOSED WOs</span>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif states == {"OPEN"}:
+        st.markdown(
+            """
+            <span style="
+                display:inline-block;
+                margin-top:.35rem;
+                padding:.25rem .65rem;
+                border-radius:999px;
+                background:#b91c1c;
+                color:white;
+                font-weight:700;
+                font-size:.8rem;
+            ">OPEN WOs FOUND</span>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with st.expander("Source rows — exact AI context"):
     api_key = str(st.secrets.get("OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")).strip()
     model = str(st.secrets.get("TURNOVER_AI_MODEL", "") or os.getenv("TURNOVER_AI_MODEL", "gpt-4.1-mini")).strip()
     if not api_key:
