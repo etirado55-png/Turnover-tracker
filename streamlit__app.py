@@ -351,7 +351,7 @@ EXPECTED_HEADERS = [
     "Status", "AssignedTo", "Attachments", "EntryID", "CreatedAt",
     "Capsule", "Bay", "CapsuleID"
 ]
-TECH_LIST = ["Unassigned", "Eduardo Tirado", "Jose Canga", "Kevin Ortega", "August Barros", "Xavier Barnes",
+TECH_LIST = ["Unassigned", "Eduardo Tirado", "Jose Canga", "Griffin", "August Barros", "Xavier Barnes",
               "Michael Budenski (Bud)", "Frank Comploier" , "Nicholas Bijeau (Nick)", "Warren Schuur"]
 
 RFM_HEADERS = [
