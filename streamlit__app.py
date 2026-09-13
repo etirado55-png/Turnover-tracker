@@ -1846,7 +1846,13 @@ def _ta_answer(question, records, coverage, model, api_key):
     return answer
 
 
-def render_turnover_assistant(wo_filtered, rfm_filtered, scope):
+def render_turnover_assistant(
+    wo_filtered,
+    rfm_filtered,
+    scope,
+    wo_history,
+    rfm_history,
+):
     st.subheader("Turnover Assistant")
     st.caption("Read-only · Uses active site, search, date, location, status, bay and capsule filters. "
                "Only retrieved rows go to OpenAI: at most 20 rows / 24 KB, with long fields shortened. "
