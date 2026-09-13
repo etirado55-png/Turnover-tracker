@@ -2610,6 +2610,7 @@ if current_tab == TAB_NAME:
                 status = str(r.get("Status", "")).strip()
                 notes = str(r.get("Notes", "")).strip()
                 latest_reso = _latest_resolution(r, wo_no)
+                assigned_to = str(r.get("AssignedTo", "")).strip()
 
                 rowkey = f"row_today_{wo_no or idx}"
 
@@ -2636,11 +2637,15 @@ if current_tab == TAB_NAME:
                     loc_bits = [loc] + ([bay] if bay else []) + ([cap] if cap else [])
                     st.caption(f"[{' · '.join([b for b in loc_bits if b])}]")
 
+                if assigned_to and assigned_to.lower() != "unassigned":
+                    st.caption(f"Assigned to: {assigned_to}")
+
                 if latest_reso:
                     st.markdown(
                         f"<div class='rowline'><span class='resogreen'>{html.escape(latest_reso)}</span></div>",
                         unsafe_allow_html=True,
                     )
+                    
                 elif notes:
                     notes_clean = " ".join(notes.split())
                     st.markdown(
