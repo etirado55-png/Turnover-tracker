@@ -1731,54 +1731,54 @@ def render_turnover_assistant(wo_filtered, rfm_filtered, scope):
     elif not api_key:
         answer = "Relevant source rows found. Configure OPENAI_API_KEY to enable AI answers."
         else:
-        try:
-            with st.spinner("Reading relevant turnover rows…"):
-                answer = _ta_answer(question, records, coverage, model, api_key)
-        except Exception as e:
-            from urllib.error import HTTPError, URLError
-
-            if isinstance(e, HTTPError):
-                error_code = ""
-                try:
-                    details = json.loads(e.read().decode("utf-8"))
-                    error_code = details.get("error", {}).get("code", "")
-                except Exception:
-                    pass
-
-                explanations = {
-                    400: "The API rejected the request format.",
-                    401: "The API key was rejected.",
-                    403: "The API key does not have permission.",
-                    404: "The model or API endpoint was not found.",
-                    429: "API quota or rate limit reached.",
-                }
-                reason = explanations.get(
-                    e.code, "The API returned a server error."
-                )
-                if error_code == "insufficient_quota":
-                    reason = (
-                        "The API account has insufficient quota. "
-                        "Check API billing and credits."
+            try:
+                with st.spinner("Reading relevant turnover rows…"):
+                    answer = _ta_answer(question, records, coverage, model, api_key)
+            except Exception as e:
+                from urllib.error import HTTPError, URLError
+    
+                if isinstance(e, HTTPError):
+                    error_code = ""
+                    try:
+                        details = json.loads(e.read().decode("utf-8"))
+                        error_code = details.get("error", {}).get("code", "")
+                    except Exception:
+                        pass
+    
+                    explanations = {
+                        400: "The API rejected the request format.",
+                        401: "The API key was rejected.",
+                        403: "The API key does not have permission.",
+                        404: "The model or API endpoint was not found.",
+                        429: "API quota or rate limit reached.",
+                    }
+                    reason = explanations.get(
+                        e.code, "The API returned a server error."
                     )
-
-                answer = f"AI request failed — HTTP {e.code}: {reason}"
-            elif isinstance(e, (URLError, TimeoutError)):
-                answer = "AI request failed — connection error or timeout."
-            else:
-                answer = (
-                    f"AI request failed — {type(e).__name__}. "
-                    "No usable answer was returned."
-                )
-
-    messages = st.session_state.get("ta_messages", [])
-    messages.append({
-        "question": question,
-        "answer": answer,
-        "rows": records,
-        "coverage": coverage,
-    })
-    st.session_state["ta_messages"] = messages[-8:]
-    st.rerun()
+                    if error_code == "insufficient_quota":
+                        reason = (
+                            "The API account has insufficient quota. "
+                            "Check API billing and credits."
+                        )
+    
+                    answer = f"AI request failed — HTTP {e.code}: {reason}"
+                elif isinstance(e, (URLError, TimeoutError)):
+                    answer = "AI request failed — connection error or timeout."
+                else:
+                    answer = (
+                        f"AI request failed — {type(e).__name__}. "
+                        "No usable answer was returned."
+                    )
+    
+        messages = st.session_state.get("ta_messages", [])
+        messages.append({
+            "question": question,
+            "answer": answer,
+            "rows": records,
+            "coverage": coverage,
+        })
+        st.session_state["ta_messages"] = messages[-8:]
+        st.rerun()
 
 
 # ===================== Row-state helpers (module-level) =====================
