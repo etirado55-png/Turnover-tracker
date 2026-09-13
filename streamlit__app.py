@@ -2798,19 +2798,49 @@ if current_tab == TAB_NAME:
             pill = colored_status(stat)
             line = f"<b>WO {wo}</b> — <b>{ttl}</b> | <span style='color:limegreen;'>{html.escape(res or '(no resolution yet)')}</span>"
             st.markdown(f"{line} &nbsp; <span style='opacity:.7;'>[{html.escape(loc)}]</span> &nbsp; {pill}", unsafe_allow_html=True)
-
     # Reuse WO search results; filter already-scoped RFM rows through the same helper.
     assistant_wo = matches.copy()
     assistant_rfm = apply_filters(
-        rfm_df_scoped, QUERY_TEXT, start_date=start, end_date=end,
-        loc_filter=loc_mult, status_filter=status_mult,
-        fields=["RFM", "Title", "Description", "Location", "Status"], search_mode=SEARCH_MODE,
+        rfm_df_scoped,
+        QUERY_TEXT,
+        start_date=start,
+        end_date=end,
+        loc_filter=loc_mult,
+        status_filter=status_mult,
+        fields=["RFM", "Title", "Description", "Location", "Status"],
+        search_mode=SEARCH_MODE,
     ).copy()
-    for column, selected in (("Bay", sel_filter_bay), ("Capsule", sel_filter_cap)):
+
+    for column, selected in (
+        ("Bay", sel_filter_bay),
+        ("Capsule", sel_filter_cap),
+    ):
         if selected:
-            assistant_wo = assistant_wo[assistant_wo[column].fillna("").astype(str).str.strip().eq(selected)] if column in assistant_wo else assistant_wo.iloc[0:0]
-            assistant_rfm = assistant_rfm[assistant_rfm[column].fillna("").astype(str).str.strip().eq(selected)] if column in assistant_rfm else assistant_rfm.iloc[0:0]
-      render_turnover_assistant(
+            assistant_wo = (
+                assistant_wo[
+                    assistant_wo[column]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .eq(selected)
+                ]
+                if column in assistant_wo
+                else assistant_wo.iloc[0:0]
+            )
+
+            assistant_rfm = (
+                assistant_rfm[
+                    assistant_rfm[column]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .eq(selected)
+                ]
+                if column in assistant_rfm
+                else assistant_rfm.iloc[0:0]
+            )
+
+    render_turnover_assistant(
         assistant_wo,
         assistant_rfm,
         (
@@ -2830,6 +2860,7 @@ if current_tab == TAB_NAME:
     )
 
     # ===================== Debug info (Entries scope) =====================
+  
     with st.expander("Debug info", expanded=False):
         try:
             st.write("Entries rows (scoped):", len(df_scoped))
