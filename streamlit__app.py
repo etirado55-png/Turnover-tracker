@@ -1472,10 +1472,12 @@ if current_tab == TAB_NAME:
     _CAP_OPTIONS   = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5",
                       "Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
 
+   
     # 1. Define the callback function BEFORE the layout
     def clear_baycap_filters():
         st.session_state["filter_bay"] = ""
         st.session_state["filter_cap"] = ""
+        st.session_state["search_query"] = "" # This clears the search box!
 
     col_bay, col_cap, col_baycap_clear = st.columns([2, 2, 1])
     
