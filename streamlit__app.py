@@ -2073,103 +2073,6 @@ if st.session_state.get("_prev_tab") == BAYS_TAB and current_tab != BAYS_TAB:
 
 if current_tab == TAB_NAME:
 
-    # ===================== Document Upload & Import =====================
-    _section_header("Import Work Orders", color="#22C55E", icon="📥")
-    with st.expander("Upload CSV or Excel", expanded=False):
-        if not is_editor:
-            st.info("Viewer access can preview turnover data but cannot import work orders.")
-        else:
-            uploaded_wo_file = st.file_uploader(
-                "Work-order export",
-                type=["csv", "xlsx", "xls"],
-                key="wo_document_upload",
-                help="Common headers such as WONUM, Description, Scheduled Start, Location, Status, and Assigned To are mapped automatically.",
-            )
-
-            if uploaded_wo_file is not None:
-                upload_bytes = uploaded_wo_file.getvalue()
-                upload_suffix = os.path.splitext(uploaded_wo_file.name.lower())[1]
-                selected_sheet = None
-                try:
-                    if upload_suffix in {".xlsx", ".xls"}:
-                        sheet_names = _excel_sheet_names(upload_bytes)
-                        selected_sheet = st.selectbox(
-                            "Excel worksheet",
-                            options=sheet_names,
-                            key=f"import_sheet_{hashlib.md5(upload_bytes).hexdigest()[:10]}",
-                        )
-
-                    raw_import_df = _read_uploaded_work_orders(
-                        upload_bytes,
-                        uploaded_wo_file.name,
-                        sheet_name=selected_sheet,
-                    )
-                    default_import_location = filtered_locations_for_current()[0]
-                    import_df, mapped_columns = transform_imported_work_orders(
-                        raw_import_df,
-                        default_import_location,
-                    )
-
-                    if import_df.empty:
-                        st.warning("No work-order numbers were found. Check that the document has a WO/Work Order/WONUM column.")
-                    else:
-                        invalid_date_mask = import_df["Date"].astype(str).str.strip() == ""
-                        invalid_date_count = int(invalid_date_mask.sum())
-                        existing_wo_keys = {
-                            _clean_import_wo(v).upper()
-                            for v in df.get("WO", pd.Series(dtype=str)).astype(str)
-                            if _clean_import_wo(v)
-                        }
-                        import_df["__duplicate"] = import_df["WO"].astype(str).str.upper().isin(existing_wo_keys)
-                        duplicate_count = int(import_df["__duplicate"].sum())
-
-                        st.caption(
-                            f"Parsed {len(raw_import_df)} source rows into {len(import_df)} work orders. "
-                            f"Mapped source columns: {', '.join(map(str, mapped_columns)) or 'none'}."
-                        )
-                        preview_cols = [
-                            "WO", "Title", "Date", "Location", "Status", "AssignedTo",
-                            "Resolution", "Bay", "Capsule", "CapsuleID", "__duplicate",
-                        ]
-                        st.dataframe(
-                            import_df[preview_cols].rename(columns={"__duplicate": "Already in Sheet"}),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
-                        skip_duplicates = st.checkbox(
-                            "Skip WOs already in the Google Sheet",
-                            value=True,
-                            key="import_skip_existing_wos",
-                        )
-                        if invalid_date_count:
-                            st.error(
-                                f"{invalid_date_count} row(s) have a missing or invalid scheduled date and will not be imported."
-                            )
-                        if duplicate_count and skip_duplicates:
-                            st.info(f"{duplicate_count} existing WO(s) will be skipped.")
-
-                        ready_import_df = import_df[~invalid_date_mask].copy()
-                        if skip_duplicates:
-                            ready_import_df = ready_import_df[~ready_import_df["__duplicate"]].copy()
-                        ready_import_df = ready_import_df.drop_duplicates(subset=["WO"], keep="last")
-
-                        if st.button(
-                            f"Import {len(ready_import_df)} Work Order(s)",
-                            type="primary",
-                            disabled=ready_import_df.empty,
-                            use_container_width=True,
-                            key="confirm_wo_document_import",
-                        ):
-                            payload = ready_import_df.drop(columns=["__duplicate"], errors="ignore")
-                            append_entries(payload.to_dict("records"))
-                            st.success(f"Imported {len(payload)} work order(s) into the Entries sheet.")
-                            st.rerun()
-                except ImportError as e:
-                    st.error(f"Excel support is not installed on the app server: {e}")
-                except Exception as e:
-                    st.error(f"Could not parse this document: {e}")
-
     # ===================== Global Search Results (grouped by WO) =====================
     _section_header("Search Results", color="#00BFA6", icon="🔍")
     if "start" not in locals(): start = None
@@ -2865,6 +2768,103 @@ if current_tab == TAB_NAME:
         df_scoped,
         rfm_df_scoped,
     )
+
+  # ===================== Document Upload & Import =====================
+    _section_header("Import Work Orders", color="#22C55E", icon="📥")
+    with st.expander("Upload CSV or Excel", expanded=False):
+        if not is_editor:
+            st.info("Viewer access can preview turnover data but cannot import work orders.")
+        else:
+            uploaded_wo_file = st.file_uploader(
+                "Work-order export",
+                type=["csv", "xlsx", "xls"],
+                key="wo_document_upload",
+                help="Common headers such as WONUM, Description, Scheduled Start, Location, Status, and Assigned To are mapped automatically.",
+            )
+
+            if uploaded_wo_file is not None:
+                upload_bytes = uploaded_wo_file.getvalue()
+                upload_suffix = os.path.splitext(uploaded_wo_file.name.lower())[1]
+                selected_sheet = None
+                try:
+                    if upload_suffix in {".xlsx", ".xls"}:
+                        sheet_names = _excel_sheet_names(upload_bytes)
+                        selected_sheet = st.selectbox(
+                            "Excel worksheet",
+                            options=sheet_names,
+                            key=f"import_sheet_{hashlib.md5(upload_bytes).hexdigest()[:10]}",
+                        )
+
+                    raw_import_df = _read_uploaded_work_orders(
+                        upload_bytes,
+                        uploaded_wo_file.name,
+                        sheet_name=selected_sheet,
+                    )
+                    default_import_location = filtered_locations_for_current()[0]
+                    import_df, mapped_columns = transform_imported_work_orders(
+                        raw_import_df,
+                        default_import_location,
+                    )
+
+                    if import_df.empty:
+                        st.warning("No work-order numbers were found. Check that the document has a WO/Work Order/WONUM column.")
+                    else:
+                        invalid_date_mask = import_df["Date"].astype(str).str.strip() == ""
+                        invalid_date_count = int(invalid_date_mask.sum())
+                        existing_wo_keys = {
+                            _clean_import_wo(v).upper()
+                            for v in df.get("WO", pd.Series(dtype=str)).astype(str)
+                            if _clean_import_wo(v)
+                        }
+                        import_df["__duplicate"] = import_df["WO"].astype(str).str.upper().isin(existing_wo_keys)
+                        duplicate_count = int(import_df["__duplicate"].sum())
+
+                        st.caption(
+                            f"Parsed {len(raw_import_df)} source rows into {len(import_df)} work orders. "
+                            f"Mapped source columns: {', '.join(map(str, mapped_columns)) or 'none'}."
+                        )
+                        preview_cols = [
+                            "WO", "Title", "Date", "Location", "Status", "AssignedTo",
+                            "Resolution", "Bay", "Capsule", "CapsuleID", "__duplicate",
+                        ]
+                        st.dataframe(
+                            import_df[preview_cols].rename(columns={"__duplicate": "Already in Sheet"}),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                        skip_duplicates = st.checkbox(
+                            "Skip WOs already in the Google Sheet",
+                            value=True,
+                            key="import_skip_existing_wos",
+                        )
+                        if invalid_date_count:
+                            st.error(
+                                f"{invalid_date_count} row(s) have a missing or invalid scheduled date and will not be imported."
+                            )
+                        if duplicate_count and skip_duplicates:
+                            st.info(f"{duplicate_count} existing WO(s) will be skipped.")
+
+                        ready_import_df = import_df[~invalid_date_mask].copy()
+                        if skip_duplicates:
+                            ready_import_df = ready_import_df[~ready_import_df["__duplicate"]].copy()
+                        ready_import_df = ready_import_df.drop_duplicates(subset=["WO"], keep="last")
+
+                        if st.button(
+                            f"Import {len(ready_import_df)} Work Order(s)",
+                            type="primary",
+                            disabled=ready_import_df.empty,
+                            use_container_width=True,
+                            key="confirm_wo_document_import",
+                        ):
+                            payload = ready_import_df.drop(columns=["__duplicate"], errors="ignore")
+                            append_entries(payload.to_dict("records"))
+                            st.success(f"Imported {len(payload)} work order(s) into the Entries sheet.")
+                            st.rerun()
+                except ImportError as e:
+                    st.error(f"Excel support is not installed on the app server: {e}")
+                except Exception as e:
+                    st.error(f"Could not parse this document: {e}")
 
     # ===================== Debug info (Entries scope) =====================
   
