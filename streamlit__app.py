@@ -1467,12 +1467,18 @@ if current_tab == TAB_NAME:
             key="hilite_bg",
         )
 
-    # ── Bay / Capsule filter row ────────────────────────────────────────
+ # ── Bay / Capsule filter row ────────────────────────────────────────
     _BAY_OPTIONS   = ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"]
     _CAP_OPTIONS   = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5",
                       "Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
 
+    # 1. Define the callback function BEFORE the layout
+    def clear_baycap_filters():
+        st.session_state["filter_bay"] = ""
+        st.session_state["filter_cap"] = ""
+
     col_bay, col_cap, col_baycap_clear = st.columns([2, 2, 1])
+    
     with col_bay:
         sel_filter_bay = st.selectbox(
             "Filter by Bay",
@@ -1480,6 +1486,7 @@ if current_tab == TAB_NAME:
             key="filter_bay",
             help="Select a bay to browse capsule history without typing",
         )
+        
     with col_cap:
         sel_filter_cap = st.selectbox(
             "Filter by Capsule",
@@ -1487,12 +1494,16 @@ if current_tab == TAB_NAME:
             key="filter_cap",
             help="Optionally narrow to a specific capsule within the selected bay",
         )
+        
     with col_baycap_clear:
         st.markdown("<div style='margin-top:1.75rem;'>", unsafe_allow_html=True)
-        if st.button("Clear", key="baycap_filter_clear", use_container_width=True):
-            st.session_state["filter_bay"] = ""
-            st.session_state["filter_cap"] = ""
-            st.rerun()
+        # 2. Attach the callback to the button using on_click
+        st.button(
+            "Clear", 
+            key="baycap_filter_clear", 
+            use_container_width=True, 
+            on_click=clear_baycap_filters
+        )
         st.markdown("</div>", unsafe_allow_html=True)
 
 else:
