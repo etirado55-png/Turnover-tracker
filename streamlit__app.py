@@ -2494,7 +2494,7 @@ if current_tab == TAB_NAME:
     if todays.empty:
         st.caption("No entries today.")
     else:
-        with st.expander(f"Today’s WOs ({len(todays)})", expanded=False):
+        with st.expander(f"Today’s WOs ({len(todays)})", expanded=True):
             st.markdown("""
             <style>
             .rowline { padding:.20rem .25rem; border-radius:.5rem; }
