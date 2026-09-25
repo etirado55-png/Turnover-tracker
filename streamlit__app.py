@@ -22,68 +22,102 @@ from zoneinfo import ZoneInfo
 from datetime import datetime, timezone, date, timedelta  # <--- Fixed: Added timedelta
 
 # --- Page setup (MUST be first Streamlit call) ---
-st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide")
+st.set_page_config(page_title="Turnover Notes", page_icon="🗒️", layout="wide", initial_sidebar_state="collapsed")
 
 # --- put this near the top of your app (once) ---
 for k, v in {"qp_id":"", "qp_title":"", "qp_note":""}.items():
     st.session_state.setdefault(k, v)
 
 
-# ---- UI helpers (pill + green text) ----
+# ===================== Dashboard visual system =====================
 st.markdown("""
 <style>
-.pill{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.72rem;
-      font-weight:600;vertical-align:middle;}
-.pill-wip{background:#fff3cd;border:1px solid #ffec99;color:#8a6d3b;}
-.pill-appr{background:#e7f5ff;border:1px solid #a5d8ff;color:#1c7ed6;}
-.pill-comp{background:#e6fcf5;border:1px solid #96f2d7;color:#0ca678;}
-.pill-rts{background:#f8f0fc;border:1px solid #e5dbff;color:#7048e8;}
-.pill-wmatl{background:#fff0f6;border:1px solid #fcc2d7;color:#d6336c;}
-.pill-wappr{background:#f1f3f5;border:1px solid #dee2e6;color:#495057;}
-.pill-hold{background:#fff5f5;border:1px solid #ffc9c9;color:#e03131;}
-.pill-draft{background:#f8f9fa;border:1px solid #e9ecef;color:#868e96;}
-.resogreen{color:#0b8a2a;font-weight:500;}
-.smallmuted{font-size:.8rem;opacity:.7;}
-
-/* Dark-background highlight helpers */
-.highlight-teal{
-    background-color:#00BFA6;
-    color:#FFFFFF;
-    padding:.1rem .4rem;
-    border-radius:.35rem;
-}
-.highlight-amber{
-    background-color:#FFC857;
-    color:#000000;
-    padding:.1rem .4rem;
-    border-radius:.35rem;
-}
-.highlight-green{
-    background-color:#00C853;
-    color:#FFFFFF;
-    padding:.1rem .4rem;
-    border-radius:.35rem;
+.stApp {background:#0c1421;color:#edf2fa;}
+[data-testid="stHeader"] {background:#0c1421;}
+[data-testid="stMainBlockContainer"] {max-width:1280px;padding-top:2rem;padding-bottom:2rem;}
+[data-testid="stSidebar"] {background:#131e2e;color:#edf2fa;}
+[data-testid="stSidebar"] * {color:inherit;}
+[data-testid="stMarkdownContainer"], [data-testid="stWidgetLabel"] {color:#edf2fa;}
+[data-testid="stCaptionContainer"] {color:#a1b0c5;}
+h1,h2,h3 {color:#edf2fa;letter-spacing:-.025em;}
+h2 {font-size:1.45rem!important;} h3 {font-size:1.15rem!important;}
+[data-testid="stVerticalBlockBorderWrapper"] > div {border-color:#29374b!important;}
+[data-testid="stForm"], [data-testid="stExpander"] {background:#131e2e;border-color:#29374b;border-radius:10px;}
+[data-testid="stExpander"] summary {color:#edf2fa;}
+[data-baseweb="input"], [data-baseweb="base-input"], [data-baseweb="textarea"],
+[data-baseweb="select"] > div {background:#192638!important;color:#edf2fa!important;border-color:#34445b!important;}
+/* Support both BaseWeb and newer React Aria widget renderers. */
+input,textarea {background:#192638!important;color:#edf2fa!important;caret-color:#65d9c6;}
+[data-testid="stTextInputRootElement"], [data-testid="stTextAreaRootElement"],
+[data-testid="stSelectbox"] [role="group"], [data-testid="stDateInput"] [role="group"],
+[data-testid="stNumberInputContainer"] {background:#192638!important;color:#edf2fa!important;border-color:#34445b!important;}
+[data-testid="stDateInput"] [role="spinbutton"], [data-testid="stDateInput"] button,
+[data-testid="stSelectbox"] button {color:#edf2fa!important;}
+[data-testid="stCaptionContainer"] p {color:#a1b0c5!important;}
+[data-testid="stButtonGroup"] button[aria-checked="true"],
+[data-testid="stButtonGroup"] button[data-selected="true"] {background:#203d40!important;color:#65d9c6!important;border-color:#65d9c6!important;}
+input::placeholder,textarea::placeholder {color:#a1b0c5!important;}
+[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {background:#192638!important;color:#edf2fa!important;}
+[data-baseweb="option"] {color:#edf2fa!important;background:#192638;}
+[data-baseweb="option"]:hover {background:#263d51;}
+[data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button,
+[data-testid="stDownloadButton"] button {background:#192638;color:#edf2fa;border:1px solid #34445b;border-radius:8px;min-height:2.5rem;}
+[data-testid="stButton"] button p, [data-testid="stFormSubmitButton"] button p {color:inherit;}
+[data-testid="stButton"] button:hover, [data-testid="stDownloadButton"] button:hover {border-color:#65d9c6;color:#65d9c6;}
+button[kind="primary"], button[kind="primaryFormSubmit"] {background:#65d9c6!important;border-color:#65d9c6!important;color:#0c1421!important;}
+button[kind="primary"] p,button[kind="primaryFormSubmit"] p {color:#0c1421!important;}
+[data-testid="stButtonGroup"] button {background:#192638;color:#edf2fa;border-color:#34445b;}
+[data-testid="stButtonGroup"] button p {color:inherit;}
+[data-testid="stButtonGroup"] button[aria-pressed="true"] {background:#203d40;color:#65d9c6;border-color:#65d9c6;}
+[data-testid="stMetricLabel"] p {color:#a1b0c5;} [data-testid="stMetricValue"] {color:#edf2fa;}
+[data-testid="stMetric"] {background:#131e2e;border:1px solid #29374b;border-radius:10px;padding:12px 16px;}
+.turnover-header {display:flex;justify-content:space-between;gap:18px;align-items:center;padding:18px 22px;margin-bottom:12px;background:#131e2e;border:1px solid #29374b;border-radius:12px;}
+.turnover-header h1 {font-size:1.55rem;margin:0;padding:0;color:#edf2fa;}
+.turnover-eyebrow {color:#65d9c6;font-size:.75rem;letter-spacing:.09em;text-transform:uppercase;margin-bottom:4px;}
+.turnover-muted {color:#a1b0c5;font-size:.8rem;}
+.turnover-date {text-align:right;color:#edf2fa;}
+.turnover-date strong {display:block;font-weight:600;}
+.wo-id {color:#65d9c6;font-size:.8rem;font-weight:600;margin-bottom:3px;}
+.wo-title {color:#edf2fa;font-size:1rem;font-weight:600;overflow-wrap:anywhere;}
+.wo-meta {color:#a1b0c5;font-size:.8rem;margin:7px 0;overflow-wrap:anywhere;}
+.wo-resolution {color:#a5dfbf;font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;}
+.pill {display:inline-block;padding:.25rem .6rem;border-radius:6px;font-size:.75rem;font-weight:600;white-space:nowrap;}
+.pill-wip {background:#41282f;color:#ffaaaa;} .pill-appr {background:#412f1b;color:#ffc778;}
+.pill-comp,.pill-rts {background:#1c3a30;color:#87ddad;}
+.pill-wmatl,.pill-wappr {background:#20334c;color:#9ec6ff;}
+.pill-po {background:#342a49;color:#d0b2ff;}
+.pill-draft,.pill-note {background:#293446;color:#c5d1e2;}
+.pill-hold {background:#41282f;color:#ffaaaa;}
+.resogreen {color:#a5dfbf;font-weight:500;}.smallmuted {color:#a1b0c5;font-size:.8rem;}
+.highlight-teal{background:#006e62;color:#fff;padding:.1rem .4rem;border-radius:.35rem;}
+.highlight-amber{background:#735100;color:#fff;padding:.1rem .4rem;border-radius:.35rem;}
+.highlight-green{background:#236e44;color:#fff;padding:.1rem .4rem;border-radius:.35rem;}
+@media(max-width:700px){
+ [data-testid="stMainBlockContainer"]{padding:4.5rem 1rem 1rem;}
+ .turnover-header{padding:16px;align-items:flex-start;flex-direction:column;}
+ .turnover-date{text-align:left;}
+ [data-testid="stHorizontalBlock"]{flex-wrap:wrap;}
+ [data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{min-width:140px!important;flex:1 1 140px!important;}
 }
 </style>
 """, unsafe_allow_html=True)
 
 
-
-
 def _status_pill(status: str) -> str:
-    s = (status or "").strip().upper()
+    raw = str(status or "").strip()
+    norm = raw.upper()
     cls = {
         "WIP":"pill-wip", "INPRG":"pill-wip",
         "APPR":"pill-appr", "APPROVED":"pill-appr",
         "COMP":"pill-comp", "COMPLETE":"pill-comp", "COMPLETED":"pill-comp",
+        "CLOSED":"pill-comp", "CLOSE":"pill-comp", "DONE":"pill-comp",
         "RTS":"pill-rts", "RETURN TO SERVICE":"pill-rts",
         "WMATL":"pill-wmatl", "MATL HOLD":"pill-wmatl",
-        "WAPPR":"pill-wappr", "PENDING":"pill-wappr",
-        "HOLD":"pill-hold",
-        "DRAFT":"pill-draft",
-    }.get(s, "pill-wappr")
-    label = s or "STATUS"
-    return f"<span class='pill {cls}'>{html.escape(label)}</span>"
+        "WAPPR":"pill-wappr", "SUBMITTED":"pill-wappr", "PENDING":"pill-wappr",
+        "PO CREATED":"pill-po", "PO":"pill-po", "HOLD":"pill-hold",
+        "DRAFT":"pill-draft", "NOTE":"pill-note",
+    }.get(norm, "pill-note")
+    return f"<span class='pill {cls}'>{html.escape(raw or 'STATUS')}</span>"
 
 # === Search/Highlight configuration ===
 DEFAULT_HILITE_BG = "#BF0003"
@@ -748,15 +782,11 @@ def _norm_key(s: str) -> str:
     return s.upper()
 COMBINED_COLOR_MAP = {_norm_key(k): v for k, v in _DEF_COL_MAP.items()}
 def colored_status(text: str, bg: str | None = None, fg: str = "white"):
-    text = (text or "").strip()
-    if not text:
-        return ""
     if bg is None:
-        bg = COMBINED_COLOR_MAP.get(_norm_key(text), "#6b7280")
-    return (
-        f"<span style='display:inline-block;padding:.15rem .5rem;border-radius:9999px;"
-        f"font-size:.75rem;font-weight:600;background:{bg};color:{fg};'>{html.escape(text)}</span>"
-    )
+        return _status_pill(text) if str(text or "").strip() else ""
+    return (f"<span class='pill' style='background:{html.escape(bg, quote=True)};"
+            f"color:{html.escape(fg, quote=True)}'>{html.escape(str(text))}</span>")
+
 
 def wo_line(wo: str, title: str, res: str) -> str:
     return f"• WO{wo} — {title} | {res}"
@@ -1172,6 +1202,26 @@ def _scheduled_copy_text(rows: pd.DataFrame, heading: str) -> str:
         lines.append(line)
     return "\n".join(lines)
 
+def _ui_action(action: str, kind: str = "WO") -> None:
+    ss = st.session_state
+    ss["ui_action"] = action
+    if action in {"new", "edit"}:
+        ss["is_rfm"] = kind == "RFM"
+        ss["edit_loaded"] = False
+        ss["wo_status"] = "Draft" if kind == "RFM" else "APPR"
+    if action == "new":
+        ss["wo_date"] = WORKING_DATE
+    if action == "update":
+        ss["qp_kind"] = kind
+    if action == "import":
+        ss["main_tab_selector"] = "Import"
+        ss["ui_action"] = ""
+
+
+def _ui_view(view: str) -> None:
+    st.session_state["dashboard_view"] = view
+
+
 # ===================== Location UI (AFTER auth) =====================
 ALLOWED_LOCS = ["JOW", "Mission Space"]
 
@@ -1189,16 +1239,16 @@ if cur not in user_locs:
 
 LOC_WIDGET_KEY = f"locseg_{st.session_state.get('user_email','anon')}"
 if len(user_locs) > 1:
-    st.markdown("#### Location")
-    choice = st.segmented_control(
+    st.sidebar.markdown("### Site")
+    choice = st.sidebar.segmented_control(
         "Select location",
         options=user_locs,
         default=st.session_state.get("current_loc", user_locs[0]),
         key=LOC_WIDGET_KEY
     )
-    st.session_state["current_loc"] = choice
+    st.session_state["current_loc"] = choice or st.session_state.get("current_loc", user_locs[0])
 else:
-    st.caption(f"📍 Location: **{user_locs[0]}**")
+    st.sidebar.caption(f"Site: **{user_locs[0]}**")
     st.session_state["current_loc"] = user_locs[0]
 
 # ===================== Load data (scoped) =====================
@@ -1245,63 +1295,28 @@ if "Location" in mission_df.columns:
         mission_df["Location"].astype(str).str.lower().str.startswith("220")
     ].copy()
 
-# ===================== TOP-OF-PAGE BANNER =====================
+# ===================== Compact app header =====================
 _top_loc = st.session_state["current_loc"]
-if str(_top_loc).strip().lower().startswith("mission"):
-    _img_url = "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa"
-    _title = "Mission: SPACE"
-else:
-    _img_url = "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
-    _title = "Journey of Water — Inspired by Moana"
-
+_title = "Mission: SPACE" if str(_top_loc).lower().startswith("mission") else "Journey of Water"
+user_email = st.session_state.get("user_email", "unknown")
+user_role = st.session_state.get("user_role", "viewer")
+is_editor = user_role in ("editor", "admin")
 st.markdown(
-    f"""
-    <style>
-      .loc-banner {{
-        position: relative; width: 100%; height: 240px;
-        margin: 0 0 14px 0; border-radius: 10px; overflow: hidden;
-        box-shadow: 0 2px 10px rgba(0,0,0,.15);
-        background-image: url('{_img_url}');
-        background-size: cover; background-position: center;
-      }}
-      .loc-banner::after {{
-        content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.25), rgba(0,0,0,.45));
-      }}
-      .loc-banner-text {{
-        position: absolute; left: 1.25rem; bottom: .9rem; color: #fff; z-index: 1;
-        text-shadow: 0 2px 6px rgba(0,0,0,.45);
-      }}
-      .loc-banner-title {{ font-size: 1.6rem; margin: 0; font-weight: 700; }}
-    </style>
-    <div class="loc-banner">
-      <div class="loc-banner-text">
-        <div class="loc-banner-title">{_title}</div>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True
+    f"<div class='turnover-header'><div><div class='turnover-eyebrow'>Maintenance turnover</div>"
+    f"<h1>{html.escape(_title)}</h1><div class='turnover-muted'>{html.escape(user_email)} · {html.escape(user_role.title())}</div></div>"
+    f"<div class='turnover-date'><span class='turnover-muted'>Working date</span>"
+    f"<strong>{WORKING_DATE:%B %d, %Y}</strong><span class='turnover-muted'>Overnight shift · Eastern time</span></div></div>",
+    unsafe_allow_html=True,
 )
-
-st.info(
-    """Disclaimer:
-This document/system/information is intended for official use only. Unauthorized access, disclosure, or distribution is strictly prohibited.
-All use is subject to monitoring and review to ensure compliance with applicable policies and regulations."""
-)
-
-# Who's signed in
-user_email = st.session_state.get("user_email","unknown")
-user_role  = st.session_state.get("user_role","viewer")
-is_editor  = user_role in ("editor","admin")
-st.caption(f"Signed in as: {user_email} · role: {user_role}  |  build: 2026-09-12-v10")
-
-# Hard cache-bust button — forces all cached data to reload from sheet
-if st.button("🔄 Force Refresh Data", key="force_refresh_btn"):
+with st.sidebar.expander("Official use notice", expanded=False):
+    st.caption("This document/system/information is intended for official use only. Unauthorized access, disclosure, or distribution is strictly prohibited. All use is subject to monitoring and review to ensure compliance with applicable policies and regulations.")
+st.sidebar.caption("Dashboard build · 2026-09-25")
+if st.sidebar.button("Refresh data", key="force_refresh_btn", use_container_width=True):
     st.cache_data.clear()
     st.cache_resource.clear()
-    for k in ["ws_headers_checked"]:
-        st.session_state.pop(k, None)
+    st.session_state.pop("ws_headers_checked", None)
     st.rerun()
+show_diagnostics = is_admin() and st.sidebar.checkbox("Show diagnostics", key="ui_diagnostics")
 
 # ===================== ADMIN: Manage Users (sidebar) =====================
 if is_admin() and (
@@ -1426,98 +1441,63 @@ if is_admin() and (
                         except Exception as e:
                             st.error(f"Failed to regenerate: {e}")
 
-# ===================== NAV TABS (Entries / RFM / Bays & Capsules)
-# Updated NAV TABS
+# ===================== Navigation and actions =====================
+_ui_nav = [TAB_NAME, BAYS_TAB, "Capsule Notes", JPCS_TAB, "Asset #", "Assistant", "Import"]
+_ui_labels = {TAB_NAME: "Turnover", JPCS_TAB: "Job Plans", "Asset #": "Assets"}
+if st.session_state.get("main_tab_selector") not in _ui_nav:
+    st.session_state["main_tab_selector"] = TAB_NAME
 current_tab = st.segmented_control(
-    "Select view",
-    options=[TAB_NAME, BAYS_TAB, "Capsule Notes", JPCS_TAB, "Asset #"],
-    default=st.session_state.get("main_tab_selector", TAB_NAME),
-    key="main_tab_selector"
-)
+    "View", options=_ui_nav, key="main_tab_selector",
+    format_func=lambda value: _ui_labels.get(value, value),
+    label_visibility="collapsed",
+) or TAB_NAME
 
-# Make sure search-related keys exist when not on Entries
-if current_tab != TAB_NAME:
-    st.session_state.setdefault("search_query", "")
-    st.session_state.setdefault("search_mode", "Phrase")
-    st.session_state.setdefault("hilite_bg", DEFAULT_HILITE_BG)
+if is_editor:
+    _actions = st.columns([1.1, 1.1, 1.3, 1.1, 1.4])
+    _actions[0].button("+ New WO", key="ui_new_wo", type="primary", use_container_width=True,
+                       on_click=_ui_action, args=("new", "WO"))
+    _actions[1].button("New RFM", key="ui_new_rfm", use_container_width=True,
+                       on_click=_ui_action, args=("new", "RFM"))
+    _actions[2].button("Add progress note", key="ui_progress", use_container_width=True,
+                       on_click=_ui_action, args=("update", "WO"))
+    _actions[3].button("Import", key="ui_import", use_container_width=True,
+                       on_click=_ui_action, args=("import",))
+    with _actions[4].expander("Correct last entry"):
+        st.button("Edit last WO entry", key="ui_edit_wo", on_click=_ui_action, args=("edit", "WO"))
+        st.button("Edit last RFM entry", key="ui_edit_rfm", on_click=_ui_action, args=("edit", "RFM"))
+_entry_panel = st.container()
+_copy_panel = st.container()
+_summary_panel = st.container()
 
-# ===================== SEARCH UI (only for Entries)
-if current_tab == TAB_NAME:
-    col_a, col_b, col_c = st.columns(3)
+# Keep shared filter state while moving among views.
+for _key, _default in {"search_query":"", "search_mode":"Phrase", "hilite_bg":DEFAULT_HILITE_BG,
+                       "filter_bay":"", "filter_cap":""}.items():
+    st.session_state[_key] = st.session_state.get(_key, _default)
 
-    with col_a:
-        st.text_input(
-            "Search (quotes=exact phrase; mode below)",
-            key="search_query",
-            placeholder='Examples: "cap 5"  |  pump seal  |  RFM-2025-0012'
-        )
+def clear_baycap_filters():
+    for key in ("search_query", "filter_bay", "filter_cap"):
+        st.session_state[key] = ""
 
-    with col_b:
-        SEARCH_MODE = st.selectbox(
-            "Search mode",
-            options=["Phrase", "All terms (AND)", "Any term (OR)"],
-            index=0,
-            key="search_mode"
-        )
-
-    with col_c:
-        HILITE_BG = st.color_picker(
-            "Highlight color",
-            value=st.session_state.get("hilite_bg", DEFAULT_HILITE_BG),
-            key="hilite_bg",
-        )
-
- # ── Bay / Capsule filter row ────────────────────────────────────────
-    _BAY_OPTIONS   = ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"]
-    _CAP_OPTIONS   = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5",
-                      "Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
-
-   
-    # 1. Define the callback function BEFORE the layout
-    def clear_baycap_filters():
-        st.session_state["filter_bay"] = ""
-        st.session_state["filter_cap"] = ""
-        st.session_state["search_query"] = "" # This clears the search box!
-
-    col_bay, col_cap, col_baycap_clear = st.columns([2, 2, 1])
-    
-    with col_bay:
-        sel_filter_bay = st.selectbox(
-            "Filter by Bay",
-            _BAY_OPTIONS,
-            key="filter_bay",
-            help="Select a bay to browse capsule history without typing",
-        )
-        
-    with col_cap:
-        sel_filter_cap = st.selectbox(
-            "Filter by Capsule",
-            _CAP_OPTIONS,
-            key="filter_cap",
-            help="Optionally narrow to a specific capsule within the selected bay",
-        )
-        
-    with col_baycap_clear:
-        st.markdown("<div style='margin-top:1.75rem;'>", unsafe_allow_html=True)
-        # 2. Attach the callback to the button using on_click
-        st.button(
-            "Clear", 
-            key="baycap_filter_clear", 
-            use_container_width=True, 
-            on_click=clear_baycap_filters
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-else:
-    SEARCH_MODE = st.session_state.get("search_mode", "Phrase")
-    HILITE_BG   = st.session_state.get("hilite_bg", DEFAULT_HILITE_BG)
-    st.session_state.setdefault("search_query", "")
-    sel_filter_bay = ""
-    sel_filter_cap = ""
-
-QUERY_TEXT     = st.session_state.get("search_query", "").strip()
+if current_tab in {TAB_NAME, "Assistant"}:
+    _search, _bay, _cap, _clear = st.columns([4, 1.4, 1.4, 1])
+    _search.text_input("Search WO, title, technician", key="search_query", placeholder="WO number, equipment, or technician…")
+    _bay.selectbox("Bay", ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"], key="filter_bay", format_func=lambda x: x or "All bays")
+    _cap.selectbox("Capsule", [""] + [f"Cap #{i}" for i in range(1, 11)], key="filter_cap", format_func=lambda x: x or "All capsules")
+    _clear.button("Clear filters", key="baycap_filter_clear", on_click=clear_baycap_filters, use_container_width=True)
+    with st.expander("Advanced search", expanded=False):
+        _mode_col, _color_col = st.columns([3, 1])
+        _mode_col.selectbox("Search mode", ["Phrase", "All terms (AND)", "Any term (OR)"], key="search_mode")
+        _color_col.color_picker("Highlight color", key="hilite_bg")
+        st.caption('Use quotes for an exact phrase. Search & history includes previous work dates.')
+SEARCH_MODE = st.session_state.get("search_mode", "Phrase")
+HILITE_BG = st.session_state.get("hilite_bg", DEFAULT_HILITE_BG)
+QUERY_TEXT = st.session_state.get("search_query", "").strip()
 sel_filter_bay = st.session_state.get("filter_bay", "")
 sel_filter_cap = st.session_state.get("filter_cap", "")
+start = st.session_state.get("start")
+end = st.session_state.get("end")
+loc_mult = st.session_state.get("loc_mult", [])
+status_mult = st.session_state.get("status_mult", [])
 
 # --- token/phrase search helpers ---
 import re as _re
@@ -1821,9 +1801,7 @@ def render_turnover_assistant(
     rfm_history,
 ):
     st.subheader("Turnover Assistant")
-    st.caption("Read-only · Uses active site, search, date, location, status, bay and capsule filters. "
-               "Only retrieved rows go to OpenAI: at most 20 rows / 24 KB, with long fields shortened. "
-               "Each question is independent; include the WO/RFM number in follow-ups.")
+    st.caption("Ask about work orders and RFMs in the selected site. Active filters apply. Include the WO/RFM number in follow-up questions.")
     history = st.checkbox("Include history rows", key="ta_history", help="Latest status is always checked against permitted site history. Enable to include matching historical events.")
     # Clear prior evidence whenever permissions, filters, mode, or loaded data change.
     fingerprint = hashlib.sha256(("assistant-status-v3" + str(scope) + str(history)).encode())
@@ -1964,14 +1942,8 @@ _STATUS_COLOR_NORM = {str(k).upper(): v for k, v in STATUS_COLOR.items()}
 _STATUS_COLOR_NORM.setdefault("COMPLETED", _STATUS_COLOR_NORM.get("CLOSED", "#59c36a"))
 
 def _status_pill_from_constants(status: str) -> str:
-    raw = (status or "").strip()
-    color = _STATUS_COLOR_NORM.get(raw.upper(), "#adb5bd")
-    return (
-        f"<span style='display:inline-block;padding:.15rem .5rem;border-radius:999px;"
-        f"font-size:.72rem;font-weight:600;line-height:1;color:white;"
-        f"background:{color};border:1px solid {color};min-width:64px;text-align:center;'>"
-        f"{html.escape(raw or 'STATUS')}</span>"
-    )
+    return _status_pill(status)
+
 
 def _toggle_row_state(key: str) -> bool:
     st.session_state.setdefault(key, False)
@@ -2001,6 +1973,10 @@ def _prime_sidebar_for(kind: str, record: dict):
     s["qp_note"] = ""
     s["qp_keep_status"] = True
     s["qp_open"] = True
+    s["ui_action"] = "update"
+    s["qp_bay"] = str(record.get("Bay", "")).strip()
+    s["qp_capsule"] = str(record.get("Capsule", "")).strip()
+    s["qp_keep_baycap"] = True
     # Pre-fill the assigned tech from the record
     _rec_tech = str(record.get("AssignedTo", "Unassigned")).strip()
     s["qp_assigned_tech"] = _rec_tech if _rec_tech in TECH_LIST else "Unassigned"
@@ -2067,293 +2043,11 @@ def _render_wo_history(wo_no: str, df_history: pd.DataFrame) -> None:
             st.markdown(f"- {line}")
 
 
-def _section_header(title: str, color: str = "#00BFA6", icon: str = "") -> None:
-    """Render a styled section title with a left accent bar."""
-    label = f"{icon} {title}".strip() if icon else title
-    st.markdown(
-        f"""<div style="display:flex;align-items:center;gap:.6rem;margin:1.1rem 0 .45rem 0;">
-  <div style="width:4px;min-height:1.5rem;border-radius:4px;background:{color};flex-shrink:0;"></div>
-  <span style="font-size:1.95rem;font-weight:700;color:{color};letter-spacing:.01em;">{html.escape(label)}</span>
-</div>""",
-        unsafe_allow_html=True,
-    )
+def _section_header(title: str, color: str = "#65d9c6", icon: str = "") -> None:
+    st.subheader(title)
 
-# ===================== ENTRIES TAB CONTENT =====================
-# If user just came from Bays & Capsules, clear cache so Today's WOs and Turnover are fresh
-if st.session_state.get("_prev_tab") == BAYS_TAB and current_tab != BAYS_TAB:
-    st.cache_data.clear()
-    st.session_state["_prev_tab"] = current_tab
-
-if current_tab == TAB_NAME:
-
-    # ===================== Global Search Results (grouped by WO) =====================
-    _section_header("Search Results", color="#00BFA6", icon="🔍")
-    if "start" not in locals(): start = None
-    if "end" not in locals(): end = None
-    if "loc_mult" not in locals(): loc_mult = []
-    if "status_mult" not in locals(): status_mult = []
-    ss = st.session_state
-    start       = ss.get("start", start)
-    end         = ss.get("end", end)
-    loc_mult    = ss.get("loc_mult", loc_mult)
-    status_mult = ss.get("status_mult", status_mult)
-
-    matches = apply_filters(
-        df_scoped.copy(),
-        query_text=QUERY_TEXT,
-        start_date=start,
-        end_date=end,
-        loc_filter=loc_mult,
-        status_filter=status_mult,
-        fields=["WO", "Title", "Resolution", "Location", "Bay", "Capsule", "AssignedTo", "CapsuleID"],
-        search_mode=SEARCH_MODE,
-    )
-
-    if QUERY_TEXT or start or end or loc_mult or status_mult:
-        if matches.empty:
-            st.caption("No matches.")
-        else:
-            def highlight(txt) -> str:
-                import math
-                # Guard against NaN / None / float NaN
-                if txt is None or (isinstance(txt, float) and math.isnan(txt)):
-                    return ""
-                s = html.escape(str(txt).strip())
-                if not s:
-                    return ""
-                tokens_for_hilite = _tokenize_query(QUERY_TEXT)
-                for t in tokens_for_hilite:
-                    s = _re.sub(_re.escape(t), lambda m: f"<span style='background:{HILITE_BG}'>{m.group(0)}</span>", s, flags=_re.IGNORECASE)
-                return s
-
-            import math as _math
-            def _sv(val) -> str:
-                if val is None or (isinstance(val, float) and _math.isnan(val)):
-                    return ""
-                return str(val).strip()
-
-            wo_ids = [str(x) for x in matches["WO"].astype(str).unique() if str(x).strip()]
-            for wo in wo_ids:
-                thread = df_scoped[df_scoped["WO"].astype(str) == wo].copy()
-                thread["__ts"] = _parse_ts(thread)
-                thread = thread.sort_values("__ts")
-
-                last   = thread.tail(1).iloc[0]
-                title  = _sv(last.get("Title"))
-                res    = _sv(last.get("Resolution"))
-                status = _sv(last.get("Status"))
-                loc    = _sv(last.get("Location"))
-                bay    = _sv(last.get("Bay"))
-                cap    = _sv(last.get("Capsule"))
-                date   = _sv(last.get("Date"))
-                tech   = _sv(last.get("AssignedTo"))
-
-                # Summary label for the expander header (plain text only)
-                wo_disp = f"WO{wo}" if not wo.upper().startswith("WO") else wo
-                summary_parts = [wo_disp]
-                if title: summary_parts.append(title)
-                if status: summary_parts.append(f"[{status}]")
-                if loc: summary_parts.append(f"· {loc}")
-                if bay: summary_parts.append(f"Bay {bay}")
-                if cap: summary_parts.append(cap)
-                if date: summary_parts.append(date)
-                expander_label = "  ".join(summary_parts)
-
-                with st.expander(expander_label, expanded=False):
-                    # Latest resolution shown prominently
-                    if res:
-                        st.markdown(f"**Latest:** {res}")
-                    if tech and tech.lower() != "unassigned":
-                        st.caption(f"Assigned: {tech}")
-
-                    # Full history table
-                    st.markdown("**History:**")
-                    for _, rr in thread.iterrows():
-                        h_date   = _sv(rr.get("Date"))
-                        h_status = _sv(rr.get("Status"))
-                        h_res    = _sv(rr.get("Resolution"))
-                        h_tech   = _sv(rr.get("AssignedTo"))
-                        h_bay    = _sv(rr.get("Bay"))
-                        h_cap    = _sv(rr.get("Capsule"))
-                        h_cid    = _sv(rr.get("CapsuleID"))
-
-                        parts = []
-                        if h_date:   parts.append(f"**{h_date}**")
-                        if h_status: parts.append(f"`{h_status}`")
-                        if h_tech and h_tech.lower() != "unassigned":
-                            parts.append(f"— {h_tech}")
-                        if h_bay:    parts.append(f"Bay {h_bay}")
-                        if h_cap:    parts.append(h_cap)
-                        if h_cid:    parts.append(f"🔖 `{h_cid}`")
-
-                        line = "  ".join(parts)
-                        if h_res:
-                            line = f"{line} | {h_res}" if line else h_res
-                        if line:
-                            st.markdown(f"- {line}")
-
-                    # Load into sidebar button
-                    if st.button("✏️ Load in sidebar", key=f"sr_load_{wo}", use_container_width=False):
-                        _prime_sidebar_for("WO", last.to_dict())
-
-    else:
-        st.caption("Use the search box to find entries.")
-
-    # ===================== Bay / Capsule History Browser =====================
-    if sel_filter_bay:
-        st.divider()
-        _section_header(f"{sel_filter_bay}" + (f" · {sel_filter_cap}" if sel_filter_cap else " — All Capsules"), color="#00BFA6", icon="📦")
-
-        _bay_df = df_scoped.copy()
-        _bay_df["Bay"]     = _bay_df["Bay"].astype(str).str.strip()
-        _bay_df["Capsule"] = _bay_df["Capsule"].astype(str).str.strip()
-        _bay_df["__ts"]    = _parse_ts(_bay_df)
-
-        # Filter by bay always
-        _bay_df = _bay_df[_bay_df["Bay"] == sel_filter_bay]
-
-        if sel_filter_cap:
-            # ── Single capsule selected: show full history directly ─────────
-            _cap_df = _bay_df[_bay_df["Capsule"] == sel_filter_cap].copy()
-
-            if _cap_df.empty:
-                st.caption(f"No entries found for {sel_filter_bay} / {sel_filter_cap}.")
-            else:
-                # Latest CapsuleID for this slot
-                _id_rows = _cap_df[_cap_df["CapsuleID"].astype(str).str.strip() != ""] if "CapsuleID" in _cap_df.columns else pd.DataFrame()
-                _cur_id  = str(_id_rows.sort_values("__ts").iloc[-1]["CapsuleID"]) if not _id_rows.empty else "—"
-                st.markdown(
-                    f"<div style='background:#1e1e1e;padding:12px 18px;border-radius:10px;"
-                    f"border:1px solid #333;margin-bottom:14px;'>"
-                    f"<span style='color:#888;font-size:.8rem;text-transform:uppercase;letter-spacing:1px;'>Current Capsule ID</span><br>"
-                    f"<span style='color:#00ffcc;font-size:1.8rem;font-weight:700;font-family:monospace;'>{html.escape(_cur_id)}</span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-                # Group by WO thread, show each as a card
-                _cap_df = _cap_df.sort_values("__ts")
-                _wo_threads = _cap_df.groupby("WO", sort=False)
-
-                for wo_key, thread in _wo_threads:
-                    wo_key = str(wo_key).strip()
-                    if not wo_key:
-                        continue
-                    latest = thread.sort_values("__ts").iloc[-1]
-                    _title  = str(latest.get("Title", "")).strip() or wo_key
-                    _status = str(latest.get("Status", "")).strip()
-                    _date   = str(latest.get("Date", "")).strip()
-                    _tech   = str(latest.get("AssignedTo", "")).strip()
-                    _pill   = colored_status(_status)
-
-                    # build history lines
-                    hist_lines = []
-                    for _, hr in thread.sort_values("__ts").iterrows():
-                        hr_date   = str(hr.get("Date", "") or "").strip()
-                        hr_status = str(hr.get("Status", "") or "").strip()
-                        hr_res    = str(hr.get("Resolution", "") or "").strip()
-                        hr_tech   = str(hr.get("AssignedTo", "") or "").strip()
-                        cap_id    = str(hr.get("CapsuleID", "") or "").strip() if "CapsuleID" in hr.index else ""
-                        parts = []
-                        if hr_date:   parts.append(f"**{hr_date}**")
-                        if hr_status: parts.append(f"[{hr_status}]")
-                        if hr_tech and hr_tech.lower() != "unassigned": parts.append(f"— {hr_tech}")
-                        if cap_id:    parts.append(f"🔖 ID: `{cap_id}`")
-                        line = " ".join(parts)
-                        if hr_res: line = f"{line} | {hr_res}" if line else hr_res
-                        if line:   hist_lines.append(f"- {line}")
-
-                    with st.expander(
-                        f"{'🔧' if not wo_key.startswith('CAP-') else '📝'} WO {wo_key} — {_title}   {_pill}   {_date}",
-                        expanded=False
-                    ):
-                        if _tech and _tech.lower() != "unassigned":
-                            st.caption(f"Assigned to: {_tech}")
-                        if hist_lines:
-                            st.markdown("\n".join(hist_lines))
-                        else:
-                            st.caption("No details recorded.")
-                        if st.button("Load in sidebar", key=f"baycap_load_{wo_key}", use_container_width=False):
-                            _prime_sidebar_for("WO", latest.to_dict())
-
-        else:
-            # ── Bay only: one expander per capsule, collapsed ───────────────
-            caps_in_bay = sorted(
-                [c for c in _bay_df["Capsule"].unique() if str(c).strip()],
-                key=lambda x: int(x.replace("Cap #","").strip()) if x.replace("Cap #","").strip().isdigit() else 999
-            )
-
-            if not caps_in_bay:
-                st.caption(f"No entries found for {sel_filter_bay}.")
-            else:
-                for cap_name in caps_in_bay:
-                    _cap_slice = _bay_df[_bay_df["Capsule"] == cap_name].copy().sort_values("__ts")
-
-                    # Latest status and ID for summary line
-                    _latest_row = _cap_slice.iloc[-1]
-                    _latest_st  = str(_latest_row.get("Status", "")).strip()
-                    _latest_id  = ""
-                    if "CapsuleID" in _cap_slice.columns:
-                        _id_rows2 = _cap_slice[_cap_slice["CapsuleID"].astype(str).str.strip() != ""]
-                        if not _id_rows2.empty:
-                            _latest_id = str(_id_rows2.iloc[-1]["CapsuleID"]).strip()
-
-                    _entry_count = len(_cap_slice["WO"].unique())
-                    _pill2 = colored_status(_latest_st)
-                    _id_badge = f" &nbsp; <code>{html.escape(_latest_id)}</code>" if _latest_id else ""
-
-                    with st.expander(
-                        f"{cap_name}  ({_entry_count} WO thread{'s' if _entry_count != 1 else ''})",
-                        expanded=False,
-                    ):
-                        # ID badge at top
-                        if _latest_id:
-                            st.markdown(
-                                f"<span style='color:#888;font-size:.8rem;'>Current ID:</span> "
-                                f"<code style='color:#00ffcc;font-size:.95rem;'>{html.escape(_latest_id)}</code>",
-                                unsafe_allow_html=True,
-                            )
-
-                        # One sub-expander per WO thread inside this capsule
-                        _wo_grps = _cap_slice.groupby("WO", sort=False)
-                        for wo_key2, thread2 in _wo_grps:
-                            wo_key2 = str(wo_key2).strip()
-                            if not wo_key2:
-                                continue
-                            _lat2   = thread2.sort_values("__ts").iloc[-1]
-                            _ttl2   = str(_lat2.get("Title", "")).strip() or wo_key2
-                            _st2    = str(_lat2.get("Status", "")).strip()
-                            _dt2    = str(_lat2.get("Date", "")).strip()
-                            _pill3  = colored_status(_st2)
-
-                            hist_lines2 = []
-                            for _, hr2 in thread2.sort_values("__ts").iterrows():
-                                hr2_date   = str(hr2.get("Date","") or "").strip()
-                                hr2_status = str(hr2.get("Status","") or "").strip()
-                                hr2_res    = str(hr2.get("Resolution","") or "").strip()
-                                hr2_tech   = str(hr2.get("AssignedTo","") or "").strip()
-                                cap_id2    = str(hr2.get("CapsuleID","") or "").strip() if "CapsuleID" in hr2.index else ""
-                                parts2 = []
-                                if hr2_date:   parts2.append(f"**{hr2_date}**")
-                                if hr2_status: parts2.append(f"[{hr2_status}]")
-                                if hr2_tech and hr2_tech.lower() != "unassigned": parts2.append(f"— {hr2_tech}")
-                                if cap_id2:    parts2.append(f"🔖 ID: `{cap_id2}`")
-                                line2 = " ".join(parts2)
-                                if hr2_res: line2 = f"{line2} | {hr2_res}" if line2 else hr2_res
-                                if line2:   hist_lines2.append(f"- {line2}")
-
-                            with st.expander(
-                                f"WO {wo_key2} — {_ttl2}   ·   {_dt2}",
-                                expanded=False,
-                            ):
-                                st.markdown(_pill3, unsafe_allow_html=True)
-                                if hist_lines2:
-                                    st.markdown("\n".join(hist_lines2))
-                                else:
-                                    st.caption("No details.")
-                                if st.button("Load in sidebar", key=f"bc2_load_{wo_key2}_{cap_name}", use_container_width=False):
-                                    _prime_sidebar_for("WO", _lat2.to_dict())
-
+# ===================== Dashboard render helpers =====================
+def _turnover_texts():
     # --- Build turnover preview for the current working date.
     d_today = df_scoped.copy()
     if not d_today.empty:
@@ -2408,382 +2102,217 @@ if current_tab == TAB_NAME:
     turnover_text_html = "\n".join(lines_html)
     turnover_text_copy = "\n".join(copy_lines)
     
-    with st.expander("Turnover Preview Debug", expanded=False):
-        st.write("WORKING_DATE:", WORKING_DATE)
-        st.write("TODAY:", TODAY)
-        st.write("today_et():", today_et())
-        st.write("Rows in df_scoped:", len(df_scoped))
-        st.write("Rows in rows_today:", len(rows_today))
-    
-        if not rows_today.empty:
-            dbg = rows_today.copy()
-            show_cols = [c for c in ["WO", "Title", "Resolution", "Date", "Location", "Status", "AssignedTo", "__ts"] if c in dbg.columns]
-            st.dataframe(dbg[show_cols], use_container_width=True)
-        else:
-            st.warning("rows_today is empty after filtering")
-    
-    with st.expander("Show Turnover Preview", expanded=False):
-        st.markdown(turnover_text_html, unsafe_allow_html=True)
+    return turnover_text_html, turnover_text_copy
 
-    def copy_to_clipboard_button(html_text: str, label: str = "Copy Turnover", key: str = "copy-turnover"):
-        if not str(html_text or "").strip():
-            st.warning("Nothing to copy yet.")
-            return
-        js_html = json.dumps(str(html_text))
-        components.html(
-            f"""
-            <button id="{key}" style="padding:.6rem 1rem;border:1px solid #666;border-radius:10px;cursor:pointer;width:100%;">
-                {label}
-            </button>
-            <script>
-            const btn = document.getElementById("{key}");
-            const html = {js_html};
-            function htmlToPlain(h) {{
-                const d = document.createElement('div');
-                d.innerHTML = h;
-                return d.innerText || d.textContent || "";
-            }}
-            btn.addEventListener("click", async () => {{
-                const plain = htmlToPlain(html);
-                try {{
-                    if (navigator.clipboard && window.ClipboardItem) {{
-                        const data = new ClipboardItem({{
-                            "text/html": new Blob([html], {{type: "text/html"}}),
-                            "text/plain": new Blob([plain], {{type: "text/plain"}}),
-                        }});
-                        await navigator.clipboard.write([data]);
-                    }} else {{
-                        await navigator.clipboard.writeText(plain);
-                    }}
-                    const original = btn.innerText;
-                    btn.innerText = "Copied!";
-                    setTimeout(() => btn.innerText = original, 1400);
-                }} catch (e) {{
-                    console.error(e);
-                    const original = btn.innerText;
-                    btn.innerText = "Copy failed";
-                    setTimeout(() => btn.innerText = original, 1600);
-                }}
-            }});
-            </script>
-            """,
-            height=48,
-        )
-
-    import hashlib
-    _dyn = hashlib.md5(turnover_text_copy.encode()).hexdigest()[:8]
-    copy_to_clipboard_button(
-        turnover_text_copy,
-        label=f"Copy Turnover (Today) — {current_loc()}",
-        key=f"copy_today_btn_{_dyn}"
-    )
-
-
-    _section_header("Today’s WOs", color="#FFC857", icon="📅")
-
-    todays = df_scoped.copy()
-    if not todays.empty:
-        # Match against Date column using WORKING_DATE (respects overnight shift).
-        # More reliable than timestamp range which breaks with missing CreatedAt
-        todays["__date_norm"] = pd.to_datetime(todays["Date"], errors="coerce").dt.date
-        todays["__ts"] = _parse_ts(todays)
-        todays["__created_sort"] = todays["CreatedAt"].astype(str).str.strip() if "CreatedAt" in todays.columns else ""
-        todays = todays[todays["__date_norm"] == WORKING_DATE].copy()
-
-    if not todays.empty and "WO" in todays.columns:
-        todays = todays[~todays["WO"].astype(str).str.strip().str.upper().str.startswith("RFM")]
-
-    if not todays.empty:
-        todays = (
-            todays
-            .sort_values(["__ts", "__created_sort"], ascending=[True, True], na_position="first")
-            .groupby("WO", as_index=False, sort=False)
-            .tail(1)
-            .sort_values(["__ts", "__created_sort"], ascending=[True, True])
-            .copy()
-        )
-
-
-    if todays.empty:
-        st.caption("No entries today.")
-    else:
-        with st.expander(f"Today’s WOs ({len(todays)})", expanded=True):
-            st.markdown("""
-            <style>
-            .rowline { padding:.20rem .25rem; border-radius:.5rem; }
-            .rowline:hover { background: rgba(0,0,0,0.04); }
-            .resogreen { color:#0b8a2a; font-weight:500; }
-            div.stButton > button[kind="secondary"] {
-              background: transparent !important; border: 0 !important; text-align: left !important;
-              padding: .10rem 0 .10rem .25rem !important; box-shadow: none !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-            for idx, (_, r) in enumerate(todays.iterrows()):
-                wo_no = str(r.get("WO", "")).strip()
-                title = str(r.get("Title", "")).strip() or "—"
-                status = str(r.get("Status", "")).strip()
-                notes = str(r.get("Notes", "")).strip()
-                latest_reso = _latest_resolution(r, wo_no)
-                assigned_to = str(r.get("AssignedTo", "")).strip()
-
-                rowkey = f"row_today_{wo_no or idx}"
-
-                cols = st.columns([1.1, 1.4, 7.5])
-                with cols[0]:
-                    st.markdown(_status_pill_from_constants(status), unsafe_allow_html=True)
-
-                with cols[1]:
-                    if _as_link_button(f"{wo_no or '—'}", key=f"todaywo_{wo_no or 'na'}"):
-                        _prime_sidebar_for("WO", r.to_dict())
-
-                with cols[2]:
-                    if st.button(
-                        f"{'▾' if _toggle_row_state(rowkey) else '▸'} {title}",
-                        key=f"titlebtn_{wo_no or idx}",
-                        use_container_width=True,
-                        help="Click to show/hide details"
-                    ):
-                        _flip_row_state(rowkey)
-
-                    loc = html.escape(str(r.get("Location", "")).strip())
-                    bay = html.escape(str(r.get("Bay", "")).strip())
-                    cap = html.escape(str(r.get("Capsule", "")).strip())
-                    loc_bits = [loc] + ([bay] if bay else []) + ([cap] if cap else [])
-                    st.caption(f"[{' · '.join([b for b in loc_bits if b])}]")
-
-                if assigned_to and assigned_to.lower() != "unassigned":
-                    st.caption(f"Assigned to: {assigned_to}")
-
-                if latest_reso:
-                    st.markdown(
-                        f"<div class='rowline'><span class='resogreen'>{html.escape(latest_reso)}</span></div>",
-                        unsafe_allow_html=True,
-                    )
-                    
-                elif notes:
-                    notes_clean = " ".join(notes.split())
-                    st.markdown(
-                        f"<div class='rowline'>{html.escape(notes_clean)}</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                if _toggle_row_state(rowkey):
-                    _render_wo_history(wo_no, df.copy())
-                    st.divider()
-
-    # ===================== Next-Day Work Orders =====================
-    # Turnover is prepared for the next calendar work date, not all future dates.
-    NEXT_WORKING_DATE = WORKING_DATE + timedelta(days=1)
-    _section_header("Next-Day Work Orders", color="#38BDF8", icon="🗓️")
-    scheduled_summary = _latest_wo_summary(df_scoped)
-    closed_wo_statuses = {
-        "COMPLETED", "COMPLETE", "COMP", "CLOSED", "CLOSE", "RTS", "DONE",
-        "CANCELLED", "CANCELED", "CANCL", "NOTE",
-    }
-    if scheduled_summary.empty:
-        upcoming_wos = scheduled_summary.copy()
-        missed_wos = scheduled_summary.copy()
-    else:
-        scheduled_summary["__date_norm"] = pd.to_datetime(
-            scheduled_summary["Date"], errors="coerce"
-        ).dt.date
-
-        active_scheduled = scheduled_summary[
-            ~scheduled_summary["Status"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .isin(closed_wo_statuses)
-        ].copy()
-
-        upcoming_wos = active_scheduled[
-            active_scheduled["__date_norm"] == NEXT_WORKING_DATE
-        ].sort_values(
-            ["__date_norm", "WO"],
-            ascending=[True, True],
-        )
-
-        missed_wos = active_scheduled[
-            (active_scheduled["__date_norm"] < WORKING_DATE)
-            & (
-                active_scheduled["Status"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-                != "WMATL"
-            )
-        ].sort_values(
-            ["__date_norm", "WO"],
-            ascending=[True, True],
-        )
-
-    upcoming_wos = apply_filters(
-        upcoming_wos,
-        QUERY_TEXT,
-        fields=["WO", "Title", "Resolution", "Status", "Location", "Bay", "Capsule", "AssignedTo", "CapsuleID"],
-        search_mode=SEARCH_MODE,
-    )
-    with st.expander(f"Next-Day Work Orders ({len(upcoming_wos)})", expanded=False):
-        if upcoming_wos.empty:
-            st.caption(f"No open WOs scheduled for {NEXT_WORKING_DATE:%Y-%m-%d} in this scope.")
-        else:
-            _render_scheduled_wo_rows(upcoming_wos, "upcoming", df.copy())
-
-    # ===================== Missed / Overdue Work Orders =====================
-    _section_header("Missed / Overdue WOs", color="#EF4444", icon="⚠️")
-    missed_wos = apply_filters(
-        missed_wos,
-        QUERY_TEXT,
-        fields=["WO", "Title", "Resolution", "Status", "Location", "Bay", "Capsule", "AssignedTo", "CapsuleID"],
-        search_mode=SEARCH_MODE,
-    )
-    with st.expander(f"Missed / Overdue WOs ({len(missed_wos)})", expanded=not missed_wos.empty):
-        if missed_wos.empty:
-            st.caption("No past-due open WOs in this scope.")
-        else:
-            missed_copy_text = _scheduled_copy_text(missed_wos, f"Missed / Overdue WOs — {current_loc()}")
-            missed_copy_key = hashlib.md5(missed_copy_text.encode("utf-8")).hexdigest()[:8]
-            copy_to_clipboard_button(
-                missed_copy_text,
-                label=f"Copy Missed WOs for Print / Handover ({len(missed_wos)})",
-                key=f"copy_missed_btn_{missed_copy_key}",
-            )
-            _render_scheduled_wo_rows(missed_wos, "missed", df.copy())
-
-
-    # ===================== Open RFMs =====================
-    _section_header("Open RFMs", color="#A78BFA", icon="📋")
-    rfm_latest = latest_status_by_rfm(rfm_df_scoped)
-    closed_rfm = {"COMPLETED","CLOSED","CLOSE","CANCL","CANCELLED","DONE"}
-    open_rfm = rfm_latest[
-    ~rfm_latest["Status"].astype(str).str.strip().str.upper().isin(closed_rfm)
-    ].copy()
-
-    open_rfm = apply_filters(
-        open_rfm, QUERY_TEXT, fields=["RFM","Title","Description","Location","Status"],
-         search_mode=SEARCH_MODE,
-    )
-
-    with st.expander(f"Open RFMs ({len(open_rfm)})", expanded=True):
-        if open_rfm.empty:
-            st.caption("No open RFMs 🎉")
-        else:
-            open_rfm["__ts"] = _parse_ts(open_rfm)
-            open_rfm = open_rfm.sort_values("__ts")
-            for idx, row in enumerate(open_rfm.itertuples(index=False), start=1):
-                r = row._asdict() if hasattr(row, "_asdict") else dict(zip(open_rfm.columns, row))
-                rfmno  = str(r.get("RFM","")).strip()
-                title  = str(r.get("Title","")).strip()
-                status = str(r.get("Status","")).strip()
-                loc    = str(r.get("Location","")).strip()
-                pill   = colored_status(status)
-                cols = st.columns([1.6, 8.4])
-                with cols[0]:
-                    if _as_link_button(rfmno or "—", key=f"openrfm_{idx}_{rfmno or 'na'}"):
-                        _prime_sidebar_for("RFM", r)
-                with cols[1]:
-                    title_html = html.escape(title)
-                    loc_html   = html.escape(loc)
-                    desc_html  = (f"<div style='margin-top:.35rem; white-space:pre-wrap;'>{html.escape(str(r.get('Description','')))}</div>"
-                                  if str(r.get('Description','')).strip() else "")
-                    details_html = f"""
-                    <details style="margin:.25rem 0 .5rem 0;">
-                      <summary style="cursor:pointer; display:flex; align-items:center; gap:.5rem;">
-                        {pill}
-                        <span><strong>RFM{html.escape(rfmno)} — {title_html}</strong> <span style='opacity:.75;'>[{loc_html}]</span></span>
-                      </summary>
-                      <div style="padding:.5rem 0 0 .25rem;">
-                        {desc_html}
-                      </div>
-                    </details>
-                    """.strip()
-                    st.markdown(details_html, unsafe_allow_html=True)
-    WORKING_DATE = get_working_date()
-    # ===================== WMATL =====================
-    _section_header("WMATL — Waiting on Materials", color="#5AA7FF", icon="📦")
-    wm_latest = latest_status_by_wo(df_scoped)
-    wm_latest = wm_latest[
-    wm_latest["Status"].astype(str).str.strip().str.upper() == "WMATL"
-    ].copy()
-    if wm_latest.empty:
-        st.caption("No WOs currently marked WMATL in this scope.")
-    else:
-        wm_latest["__ts"] = _parse_ts(wm_latest)
-        wm_latest = wm_latest.sort_values("__ts", ascending=False)
-        for _, r in wm_latest.iterrows():
-            wo   = str(r.get("WO", "")).strip()
-            ttl  = str(r.get("Title", "")).strip()
-            res  = str(r.get("Resolution", "")).strip()
-            loc  = str(r.get("Location", "")).strip()
-            stat = str(r.get("Status", "")).strip()
-            pill = colored_status(stat)
-            line = f"<b>WO {wo}</b> — <b>{ttl}</b> | <span style='color:limegreen;'>{html.escape(res or '(no resolution yet)')}</span>"
-            st.markdown(f"{line} &nbsp; <span style='opacity:.7;'>[{html.escape(loc)}]</span> &nbsp; {pill}", unsafe_allow_html=True)
-    # Reuse WO search results; filter already-scoped RFM rows through the same helper.
-    assistant_wo = matches.copy()
-    assistant_rfm = apply_filters(
-        rfm_df_scoped,
-        QUERY_TEXT,
-        start_date=start,
-        end_date=end,
-        loc_filter=loc_mult,
-        status_filter=status_mult,
-        fields=["RFM", "Title", "Description", "Location", "Status"],
+def _dashboard_filter(frame: pd.DataFrame) -> pd.DataFrame:
+    """Apply the same visible filters to list rows, counts, and assistant inputs."""
+    result = apply_filters(
+        frame, QUERY_TEXT, start_date=start, end_date=end,
+        loc_filter=loc_mult, status_filter=status_mult,
+        fields=["WO", "RFM", "Title", "Resolution", "Description", "Status", "Location", "Bay", "Capsule", "AssignedTo", "CapsuleID"],
         search_mode=SEARCH_MODE,
     ).copy()
-
-    for column, selected in (
-        ("Bay", sel_filter_bay),
-        ("Capsule", sel_filter_cap),
-    ):
+    for field, selected in (("Bay", sel_filter_bay), ("Capsule", sel_filter_cap)):
         if selected:
-            assistant_wo = (
-                assistant_wo[
-                    assistant_wo[column]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                    .eq(selected)
-                ]
-                if column in assistant_wo
-                else assistant_wo.iloc[0:0]
-            )
+            result = result[result[field].fillna("").astype(str).str.strip().eq(selected)] if field in result else result.iloc[0:0]
+    return result
 
-            assistant_rfm = (
-                assistant_rfm[
-                    assistant_rfm[column]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                    .eq(selected)
-                ]
-                if column in assistant_rfm
-                else assistant_rfm.iloc[0:0]
-            )
 
+def _dashboard_frames(wo: pd.DataFrame, rfm: pd.DataFrame, working_date: date) -> dict:
+    """Build view datasets first; derive each count from the exact displayed dataset."""
+    todays = wo.copy()
+    if not todays.empty:
+        todays["__date_norm"] = pd.to_datetime(todays["Date"], errors="coerce").dt.date
+        todays["__ts"] = _parse_ts(todays)
+        todays["__created_sort"] = todays["CreatedAt"].astype(str).str.strip() if "CreatedAt" in todays else ""
+        todays = todays[todays["__date_norm"] == working_date].copy()
+    if not todays.empty and "WO" in todays:
+        todays = todays[~todays["WO"].astype(str).str.strip().str.upper().str.startswith("RFM")]
+    if not todays.empty:
+        todays = (todays.sort_values(["__ts", "__created_sort"], na_position="first")
+                  .groupby("WO", as_index=False, sort=False).tail(1)
+                  .sort_values(["__ts", "__created_sort"]).copy())
+
+    latest = _latest_wo_summary(wo)
+    overdue = latest.copy()
+    upcoming = latest.copy()
+    materials = latest.copy()
+    if not latest.empty:
+        latest["__date_norm"] = pd.to_datetime(latest["Date"], errors="coerce").dt.date
+        closed = {"COMPLETED", "COMPLETE", "COMP", "CLOSED", "CLOSE", "RTS", "DONE", "CANCELLED", "CANCELED", "CANCL", "NOTE"}
+        status = latest["Status"].astype(str).str.strip().str.upper()
+        active = latest[~status.isin(closed)].copy()
+        upcoming = active[active["__date_norm"] == working_date + timedelta(days=1)].sort_values(["__date_norm", "WO"])
+        overdue = active[(active["__date_norm"] < working_date) & active["Status"].astype(str).str.strip().str.upper().ne("WMATL")].sort_values(["__date_norm", "WO"])
+        materials = latest[status.eq("WMATL")].sort_values("__ts", ascending=False)
+    open_rfm = latest_status_by_rfm(rfm)
+    if not open_rfm.empty:
+        closed_rfm = {"COMPLETED", "CLOSED", "CLOSE", "CANCL", "CANCELLED", "DONE"}
+        open_rfm = open_rfm[~open_rfm["Status"].astype(str).str.strip().str.upper().isin(closed_rfm)].copy()
+        open_rfm["__ts"] = _parse_ts(open_rfm)
+        open_rfm = open_rfm.sort_values("__ts")
+    return {key: _dashboard_filter(value) for key, value in
+            {"today": todays, "overdue": overdue, "next": upcoming, "materials": materials, "rfm": open_rfm}.items()}
+
+
+def _ui_text(value) -> str:
+    return "" if value is None or pd.isna(value) else str(value).strip()
+
+
+def _highlight_ui(value: str) -> str:
+    """Escape sheet content before inserting optional search highlighting."""
+    value = _ui_text(value)
+    if not QUERY_TEXT:
+        return html.escape(value)
+    phrase = re.search(r'"([^"]+)"', QUERY_TEXT)
+    terms = [(phrase.group(1) if phrase else QUERY_TEXT)] if SEARCH_MODE == "Phrase" else _tokenize_query(QUERY_TEXT)
+    terms = [term for term in terms if term]
+    if not terms:
+        return html.escape(value)
+    pattern = re.compile("|".join(re.escape(t) for t in sorted(terms, key=len, reverse=True)), re.I)
+    parts, last = [], 0
+    color = HILITE_BG if re.fullmatch(r"#[0-9a-fA-F]{6}", HILITE_BG) else "#735100"
+    red, green, blue = (int(color[i:i+2], 16) for i in (1, 3, 5))
+    foreground = "#101820" if .299 * red + .587 * green + .114 * blue > 150 else "#ffffff"
+    for match in pattern.finditer(value):
+        parts.append(html.escape(value[last:match.start()]))
+        parts.append(f"<mark style='background:{color};color:{foreground};border-radius:3px;padding:0 2px'>{html.escape(match.group())}</mark>")
+        last = match.end()
+    parts.append(html.escape(value[last:]))
+    return "".join(parts)
+
+
+def _render_work_items(rows: pd.DataFrame, prefix: str, history: pd.DataFrame, kind: str = "WO") -> None:
+    if rows.empty:
+        st.info("No matching RFMs." if kind == "RFM" else "No matching work orders in this view.")
+        return
+    for index, (_, record) in enumerate(rows.iterrows()):
+        number = _ui_text(record.get(kind, ""))
+        title = _ui_text(record.get("Title", "")) or "Untitled"
+        status = _ui_text(record.get("Status", ""))
+        details = _ui_text(record.get("Description" if kind == "RFM" else "Resolution", ""))
+        details = details or _ui_text(record.get("Notes", ""))
+        with st.container(border=True):
+            _main, _badge = st.columns([5, 1])
+            label = number if number.upper().startswith(kind) else f"{kind} {number}"
+            _main.markdown(f"<div class='wo-id'>{_highlight_ui(label)}</div><div class='wo-title'>{_highlight_ui(title)}</div>", unsafe_allow_html=True)
+            _badge.markdown(_status_pill(status), unsafe_allow_html=True)
+            location = [_ui_text(record.get(c, "")) for c in ("Location", "Bay", "Capsule")]
+            assigned = _ui_text(record.get("AssignedTo", "")) or "Unassigned"
+            meta = [x for x in location if x] + [f"Assigned to: {assigned}"]
+            if prefix != "today":
+                meta.append(_ui_text(record.get("Date", "")))
+            capsule_id = _ui_text(record.get("CapsuleID", ""))
+            if capsule_id:
+                meta.append(f"Capsule ID: {capsule_id}")
+            st.markdown(f"<div class='wo-meta'>{html.escape(' · '.join(x for x in meta if x))}</div>", unsafe_allow_html=True)
+            if details:
+                st.markdown(f"<div class='wo-resolution'>{_highlight_ui(details)}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No update recorded yet.")
+            _history_col, _update_col = st.columns([5, 1.4])
+            with _history_col.expander("View history", expanded=False):
+                if kind == "WO":
+                    _render_wo_history(number, history)
+                else:
+                    thread = history[history["RFM"].astype(str).str.strip().eq(number)].copy()
+                    if not thread.empty:
+                        thread["__ts"] = _parse_ts(thread)
+                        for _, item in thread.sort_values("__ts").iterrows():
+                            st.caption(f"{_ui_text(item.get('Date'))} · {_ui_text(item.get('Status'))}")
+                            st.write(_ui_text(item.get("Description")))
+            if is_editor:
+                if _update_col.button(f"Update {kind}", key=f"ui_update_{prefix}_{number}_{index}", use_container_width=True):
+                    _prime_sidebar_for(kind, record.to_dict())
+
+
+def copy_to_clipboard_button(text: str, label: str = "Copy turnover", key: str = "copy-turnover"):
+    """Preserve exact lines, including literal <, > and &, in clipboard output."""
+    if not str(text or "").strip():
+        return
+    # Escape script terminators in sheet text; IDs/labels are escaped separately.
+    payload = json.dumps(str(text)).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", key)
+    components.html(f"""
+    <style>body{{margin:0;font:14px system-ui;background:transparent;}}button{{padding:10px 16px;border:1px solid #34445b;border-radius:8px;background:#192638;color:#edf2fa;cursor:pointer;width:100%;}}button:hover{{border-color:#65d9c6;}}textarea{{width:98%;height:140px;background:#131e2e;color:#edf2fa;}}</style>
+    <button id="{safe_id}">{html.escape(label)}</button>
+    <script>
+    const button = document.getElementById('{safe_id}');
+    const text = {payload};
+    button.addEventListener('click', async () => {{
+        const label = button.textContent;
+        try {{
+            await navigator.clipboard.writeText(text);
+            button.textContent = 'Copied!';
+        }} catch (error) {{
+            const area = document.createElement('textarea');
+            area.value = text; document.body.appendChild(area); area.select();
+            const copied = document.execCommand('copy'); area.remove();
+            button.textContent = copied ? 'Copied!' : 'Use the turnover preview to copy';
+        }}
+        setTimeout(() => button.textContent = label, 2200);
+    }});
+    </script>
+    """, height=48)
+
+# Refresh after changes from the existing Bays & Capsules module.
+if st.session_state.get("_prev_tab") == BAYS_TAB and current_tab != BAYS_TAB:
+    st.cache_data.clear()
+    st.session_state["_prev_tab"] = current_tab
+
+if current_tab == TAB_NAME:
+    dashboard_frames = _dashboard_frames(df_scoped, rfm_df_scoped, WORKING_DATE)
+    with _copy_panel:
+        _preview_col, _copy_col = st.columns([3, 2])
+        turnover_text_html, turnover_text_copy = _turnover_texts()
+        with _preview_col.expander("Turnover preview", expanded=False):
+            st.markdown(turnover_text_html)
+            st.caption("Copy includes the complete site turnover for the working date, regardless of list filters.")
+        with _copy_col:
+            copy_to_clipboard_button(turnover_text_copy, label="Copy turnover", key="copy_today")
+    with _summary_panel:
+        st.subheader("Shift overview")
+        st.caption(f"{WORKING_DATE:%A, %B %d} · Counts reflect the filters below")
+        _cards = st.columns(5)
+        _view_names = {"today":"Today's WOs", "overdue":"Overdue", "next":"Next day", "materials":"Waiting on materials", "rfm":"Open RFMs"}
+        _active = st.session_state.get("dashboard_view", "today")
+        for _column, (_view, _label) in zip(_cards, _view_names.items()):
+            with _column:
+                st.metric(_label, len(dashboard_frames[_view]))
+                st.button("Viewing" if _view == _active else "View", key=f"view_{_view}",
+                          type="primary" if _view == _active else "secondary", use_container_width=True,
+                          on_click=_ui_view, args=(_view,))
+    _active = st.session_state.get("dashboard_view", "today")
+    if _active not in dashboard_frames:
+        _active = "today"
+    _heading = {"today":"Today's work orders", "overdue":"Missed / overdue work orders",
+                "next":f"Next-day work orders · {WORKING_DATE + timedelta(days=1):%b %d}",
+                "materials":"Waiting on materials", "rfm":"Open RFMs"}[_active]
+    st.subheader(_heading)
+    if _active == "overdue" and not dashboard_frames[_active].empty:
+        copy_to_clipboard_button(_scheduled_copy_text(dashboard_frames[_active], ""), "Copy overdue WOs", "copy_overdue")
+    _render_work_items(dashboard_frames[_active], _active, rfm_df_scoped if _active == "rfm" else df_scoped,
+                       kind="RFM" if _active == "rfm" else "WO")
+    with st.expander("Search & history — all work dates", expanded=bool(QUERY_TEXT)):
+        st.caption("Matching WO threads across work dates. Expand a record to see its history.")
+        if QUERY_TEXT or sel_filter_bay or sel_filter_cap or start or end or loc_mult or status_mult:
+            _matches = _dashboard_filter(df_scoped)
+            _matching_ids = set(_matches.get("WO", pd.Series(dtype=str)).astype(str))
+            _latest_matching = _latest_wo_summary(df_scoped)
+            _latest_matching = _latest_matching[_latest_matching["WO"].astype(str).isin(_matching_ids)]
+            _render_work_items(_latest_matching, "search", df_scoped)
+        else:
+            st.caption("Enter a search or select a bay/capsule to browse history.")
+
+elif current_tab == "Assistant":
     render_turnover_assistant(
-        assistant_wo,
-        assistant_rfm,
-        (
-            current_loc(),
-            str(user_locs),
-            QUERY_TEXT,
-            SEARCH_MODE,
-            start,
-            end,
-            loc_mult,
-            status_mult,
-            sel_filter_bay,
-            sel_filter_cap,
-        ),
-        df_scoped,
-        rfm_df_scoped,
+        _dashboard_filter(df_scoped), _dashboard_filter(rfm_df_scoped),
+        (current_loc(), str(user_locs), QUERY_TEXT, SEARCH_MODE, start, end, loc_mult, status_mult, sel_filter_bay, sel_filter_cap),
+        df_scoped, rfm_df_scoped,
     )
 
-  # ===================== Document Upload & Import =====================
-    _section_header("Import Work Orders", color="#22C55E", icon="📥")
+elif current_tab == "Import":
+    st.subheader("Import work orders")
     with st.expander("Upload CSV or Excel", expanded=False):
         if not is_editor:
             st.info("Viewer access can preview turnover data but cannot import work orders.")
@@ -2878,28 +2407,6 @@ if current_tab == TAB_NAME:
                     st.error(f"Excel support is not installed on the app server: {e}")
                 except Exception as e:
                     st.error(f"Could not parse this document: {e}")
-
-    # ===================== Debug info (Entries scope) =====================
-  
-    with st.expander("Debug info", expanded=False):
-        try:
-            st.write("Entries rows (scoped):", len(df_scoped))
-            if not df_scoped.empty and "Date" in df_scoped.columns:
-                dser = pd.to_datetime(df_scoped["Date"], errors="coerce")
-                st.write("Date range:", str(dser.min()), "→", str(dser.max()))
-            if "WO" in df_scoped.columns:
-                st.write(
-                    "Unique WOs:",
-                    df_scoped["WO"].astype(str).str.strip().replace("", pd.NA).dropna().nunique(),
-                )
-            if "Status" in df_scoped.columns:
-                st.write(
-                    "Statuses:",
-                    sorted({str(x) for x in df_scoped["Status"].dropna().unique()}),
-                )
-        except Exception as e:
-            st.write("Debug error:", e)
-
 
 # ===================== RFM TAB CONTENT =====================
 # ===================== BAYS & CAPSULES TAB CONTENT =====================
@@ -3388,542 +2895,547 @@ elif current_tab == "Asset #":
                     unsafe_allow_html=True,
                 )
 
-# ===================== Sidebar: Add / Edit / Quick Append =====================
+# ===================== Main-area entry panel =====================
+if is_editor and st.session_state.get("ui_action") in {"new", "update", "edit"}:
+    with _entry_panel:
+        with st.container(border=True):
+            _panel_heading, _panel_close = st.columns([5, 1])
+            _panel_heading.subheader({"new":"Create entry", "update":"Add progress / change status", "edit":"Correct last entry"}[st.session_state["ui_action"]])
+            _panel_close.button("Close", key="ui_close_panel", on_click=_ui_action, args=("",), use_container_width=True)
+            is_rfm_toggle = bool(st.session_state.get("is_rfm", False))
+            # ===================== Sidebar: Add / Edit / Quick Append =====================
 
-with st.sidebar.expander(
-    "➕ Add New " + ("RFM" if st.session_state.get("is_rfm") else "Work Order"),
-    expanded=not st.session_state.get("qp_open", False)
-):
-    is_rfm_toggle = st.toggle(
-    "RFM mode",
-    value=st.session_state.get("is_rfm", False),
-    key="is_rfm",
-    help="Switch between Work Orders and Requests For Maintenance"
-)
+            if st.session_state.get("ui_action") == "new":
+                st.caption("New RFM" if is_rfm_toggle else "New work order")
 
-    if is_rfm_toggle:
-        st.caption("Material Att ROBLK004")
+                if is_rfm_toggle:
+                    st.caption("Material Att ROBLK004")
 
-    st.session_state.setdefault("wo_date", WORKING_DATE)
-    st.session_state.setdefault("wo_number", "")
-    st.session_state.setdefault("wo_title", "")
-    st.session_state.setdefault("wo_capsule", "")
-    st.session_state.setdefault("wo_bay", "")
-    st.session_state.setdefault("wo_resolution", "")
-    st.session_state.setdefault("wo_status", "APPR")
-    default_loc = next(
-        (l for l in filtered_locations_for_current() if "General" in l),
-        filtered_locations_for_current()[0]
-    )
-    st.session_state.setdefault("wo_location", default_loc)
-    st.session_state.setdefault("wo_attachments", "")
+                st.session_state.setdefault("wo_date", WORKING_DATE)
+                st.session_state.setdefault("wo_number", "")
+                st.session_state.setdefault("wo_title", "")
+                st.session_state.setdefault("wo_capsule", "")
+                st.session_state.setdefault("wo_bay", "")
+                st.session_state.setdefault("wo_resolution", "")
+                st.session_state.setdefault("wo_status", "APPR")
+                default_loc = next(
+                    (l for l in filtered_locations_for_current() if "General" in l),
+                    filtered_locations_for_current()[0]
+                )
+                st.session_state.setdefault("wo_location", default_loc)
+                st.session_state.setdefault("wo_attachments", "")
 
-    STATUS_OPTIONS = (
-        ["Draft", "WAPPR", "Submitted", "PO Created", "Completed"]
-        if is_rfm_toggle
-        else STATUSES
-    )
+                STATUS_OPTIONS = (
+                    ["Draft", "WAPPR", "Submitted", "PO Created", "Completed"]
+                    if is_rfm_toggle
+                    else STATUSES
+                )
 
-    LOCATION_OPTIONS = filtered_locations_for_current()
-    prev_loc = st.session_state.get("wo_location", "")
-    if prev_loc not in LOCATION_OPTIONS:
-        st.session_state["wo_location"] = default_loc
+                LOCATION_OPTIONS = filtered_locations_for_current()
+                prev_loc = st.session_state.get("wo_location", "")
+                if prev_loc not in LOCATION_OPTIONS:
+                    st.session_state["wo_location"] = default_loc
 
-    with st.form("add_wo_form", clear_on_submit=True):
-        st.date_input("Date", key="wo_date")
-        st.text_input("RFM Number" if is_rfm_toggle else "Work Order Number", key="wo_number")
-        st.text_input("Title", key="wo_title")
-        st.selectbox("Status", STATUS_OPTIONS, key="wo_status")
-        st.selectbox(
-            "Location",
-            LOCATION_OPTIONS,
-            index=LOCATION_OPTIONS.index(st.session_state["wo_location"]),
-            key="wo_location",)
-        st.selectbox("Assign To", TECH_LIST, key="wo_assigned")
+                with st.form("add_wo_form", clear_on_submit=True):
+                    _id_col, _date_col, _status_col = st.columns([2, 1, 1])
+                    _id_col.text_input("RFM Number" if is_rfm_toggle else "Work Order Number", key="wo_number")
+                    _date_col.date_input("Working date", key="wo_date")
+                    _status_col.selectbox("Status", STATUS_OPTIONS, key="wo_status")
+                    st.text_input("Title", key="wo_title")
+                    _loc_col, _assign_col = st.columns(2)
+                    _loc_col.selectbox(
+                        "Location",
+                        LOCATION_OPTIONS,
+                        index=LOCATION_OPTIONS.index(st.session_state["wo_location"]),
+                        key="wo_location",)
+                    _assign_col.selectbox("Assign To", TECH_LIST, key="wo_assigned")
         
 
-        if not is_rfm_toggle:
-            bay_options = ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"]
-            st.selectbox(
-                "Bay",
-                bay_options,
-                index=bay_options.index(st.session_state["wo_bay"])
-                    if st.session_state["wo_bay"] in bay_options else 0,
-                key="wo_bay",
-                help="Which bay this WO applies to."
-            )
-            capsule_options = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5",
-                               "Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
-            st.selectbox(
-                "Capsule #",
-                capsule_options,
-                index=capsule_options.index(st.session_state["wo_capsule"])
-                    if st.session_state["wo_capsule"] in capsule_options else 0,
-                key="wo_capsule",
-                help="Capsule number within that bay."
-            )
+                    if not is_rfm_toggle:
+                        bay_options = ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"]
+                        _bay_col, _cap_col = st.columns(2)
+                        _bay_col.selectbox(
+                            "Bay",
+                            bay_options,
+                            index=bay_options.index(st.session_state["wo_bay"])
+                                if st.session_state["wo_bay"] in bay_options else 0,
+                            key="wo_bay",
+                            help="Which bay this WO applies to."
+                        )
+                        capsule_options = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5",
+                                           "Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
+                        _cap_col.selectbox(
+                            "Capsule #",
+                            capsule_options,
+                            index=capsule_options.index(st.session_state["wo_capsule"])
+                                if st.session_state["wo_capsule"] in capsule_options else 0,
+                            key="wo_capsule",
+                            help="Capsule number within that bay."
+                        )
 
-        st.text_area(
-            "Description" if is_rfm_toggle else "Work Performed / Resolution",
-            key="wo_resolution",
-            help="General work log for this WO. For capsule-specific tracking use the 'Capsule Notes' tab." if not is_rfm_toggle else None,
-        )
-        st.text_input("Attachments (URLs, comma-separated; optional)", key="wo_attachments")
-        submitted = st.form_submit_button("Submit")
+                    st.text_area(
+                        "Description" if is_rfm_toggle else "Work Performed / Resolution",
+                        key="wo_resolution",
+                        help="General work log for this WO. For capsule-specific tracking use the 'Capsule Notes' tab." if not is_rfm_toggle else None,
+                    )
+                    st.text_input("Attachments (URLs, comma-separated; optional)", key="wo_attachments")
+                    submitted = st.form_submit_button("Save RFM" if is_rfm_toggle else "Save work order", type="primary")
 
-    if submitted:
-        try:
-            date_str = st.session_state["wo_date"].strftime("%Y-%m-%d")
-            now_str  = now_utc_isostr()  # <<< UTC ISO
-            loc      = st.session_state["wo_location"]
+                if submitted:
+                    try:
+                        if not st.session_state["wo_number"].strip():
+                            raise ValueError("A work order or RFM number is required.")
+                        date_str = st.session_state["wo_date"].strftime("%Y-%m-%d")
+                        now_str  = now_utc_isostr()  # <<< UTC ISO
+                        loc      = st.session_state["wo_location"]
 
-            if is_rfm_toggle:
-                row = {
-                    "RFM": st.session_state["wo_number"].strip(),
-                    "Title": st.session_state["wo_title"].strip(),
-                    "Description": st.session_state["wo_resolution"].strip(),
-                    "Date": date_str,
-                    "Location": loc,
-                    "Status": st.session_state["wo_status"],
-                    "Attachments": st.session_state["wo_attachments"].strip(),
-                    "EntryID": gen_entry_id(),
-                    "CreatedAt": now_str,
-                }
-                append_rfm_entry(row)
-            else:
-                row = {
-                    "WO": st.session_state["wo_number"].strip(),
-                    "Title": st.session_state["wo_title"].strip(),
-                    "Resolution": st.session_state["wo_resolution"].strip(),
-                    "Date": date_str,
-                    "Location": loc,
-                    "Status": st.session_state["wo_status"],
-                    "AssignedTo": st.session_state["wo_assigned"],
-                    "Attachments": st.session_state["wo_attachments"].strip(),
-                    "EntryID": gen_entry_id(),
-                    "CreatedAt": now_str,
-                    "Capsule": st.session_state["wo_capsule"].strip(),
-                    "Bay": st.session_state["wo_bay"].strip(),
-                }
-                append_entry(row)
-
-            st.cache_data.clear()
-            st.success("Added.")
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"Failed to add: {e}")
-
-# --- Edit Last Entry (by WO/RFM) ---
-with st.sidebar.expander("✏️ Edit Last Entry (" + ("RFM" if is_rfm_toggle else "WO") + ")", expanded=False):
-    st.session_state.setdefault("edit_loaded", False)
-    st.session_state.setdefault("edit_rownum", None)
-    st.session_state.setdefault("edit_rowdata", {})
-    st.session_state.setdefault("edit_wo_selected", "")
-
-    with st.form("edit_wo_form"):
-        edit_label = "RFM # to edit" if is_rfm_toggle else "WO # to edit"
-        edit_wo = st.text_input(edit_label, placeholder=("RFM-20250001" if is_rfm_toggle else "146720560")).strip()
-        load_btn = st.form_submit_button("Load Last Entry", use_container_width=True)
-
-    if load_btn and edit_wo and not is_rfm_toggle:
-        rownum, rowdata = _latest_rownum_for_wo(edit_wo)
-        if not rownum:
-            st.error(f"WO{edit_wo} not found.")
-        else:
-            st.session_state.update({
-                "edit_loaded": True, "edit_rownum": rownum,
-                "edit_rowdata": rowdata, "edit_wo_selected": edit_wo,
-            })
-            st.success(f"Loaded last entry for WO{edit_wo} (row {rownum})")
-    elif load_btn and edit_wo and is_rfm_toggle:
-        rownum, rowdata = _latest_rownum_for_rfm(edit_wo)
-        if not rownum:
-            st.error(f"RFM{edit_wo} not found.")
-        else:
-            st.session_state.update({
-                "edit_loaded": True, "edit_rownum": rownum,
-                "edit_rowdata": rowdata, "edit_wo_selected": edit_wo,
-            })
-            st.success(f"Loaded last entry for RFM{edit_wo} (row {rownum})")
-
-    if st.session_state.edit_loaded and st.session_state.edit_rownum:
-        rowdata = st.session_state.edit_rowdata
-        edit_wo = st.session_state.edit_wo_selected
-        rownum  = st.session_state.edit_rownum
-
-        cur_date = rowdata.get("Date", "") or WORKING_DATE.strftime("%Y-%m-%d")  # <<< ET default
-        try:
-            cur_date_val = dt.datetime.strptime(cur_date, "%Y-%m-%d").date()
-        except Exception:
-            cur_date_val = WORKING_DATE
-
-        with st.form("edit_wo_fields", clear_on_submit=False):
-            new_title = st.text_area("Title", value=rowdata.get("Title",""), height=90, key=f"edit_title_{rownum}")
-            label = "Description" if is_rfm_toggle else "Resolution"
-            cur_val = rowdata.get("Description" if is_rfm_toggle else "Resolution", "")
-            new_res = st.text_area(label, value=cur_val, height=180, key=f"edit_res_{rownum}")
-            new_date  = st.date_input("Date", value=cur_date_val, key=f"edit_date_{rownum}")
-            _edit_tech = str(rowdata.get("AssignedTo", "Unassigned")).strip()
-            _edit_tech_idx = TECH_LIST.index(_edit_tech) if _edit_tech in TECH_LIST else 0
-            new_assigned = st.selectbox("Assign To", TECH_LIST, index=_edit_tech_idx, key=f"edit_assigned_{rownum}")
-
-            STAT_OPTS = (STATUSES if not is_rfm_toggle else ["Submitted", "WAPPR", "PO Created", "Completed"])
-            EDIT_LOCATION_OPTIONS = filtered_locations_for_current(st.session_state.get("current_loc"))
-            loc_val = rowdata.get("Location","")
-            loc_idx  = EDIT_LOCATION_OPTIONS.index(loc_val) if loc_val in EDIT_LOCATION_OPTIONS else 0
-            stat_raw = rowdata.get("Status","")
-            stat_idx = STAT_OPTS.index(stat_raw) if stat_raw in STAT_OPTS else 0
-
-            new_loc  = st.selectbox("Location", EDIT_LOCATION_OPTIONS, index=loc_idx, key=f"edit_loc_{rownum}")
-            new_stat = st.selectbox("Status", STAT_OPTS, index=stat_idx, key=f"edit_stat_{rownum}")
-            new_att  = st.text_input("Attachments (URLs, optional)", value=rowdata.get("Attachments",""), key=f"edit_att_{rownum}")
-
-            col_a, col_b = st.columns(2)
-            with col_a:
-                confirm = st.form_submit_button("Save Changes", use_container_width=True)
-            with col_b:
-                cancel  = st.form_submit_button("Cancel", use_container_width=True)
-
-            if confirm:
-                try:
-                    if not is_rfm_toggle and new_stat in {"Completed"} and not (new_res or "").strip():
-                        st.warning("Resolution is required when Status is Completed.")
-                    else:
                         if is_rfm_toggle:
-                            ws = _open_rfm_ws()
-                            new_dict = {
-                                "RFM": edit_wo,
-                                "Title": (new_title or "").strip(),
-                                "Description": (new_res or "").strip(),
-                                "Date": new_date.strftime("%Y-%m-%d"),
-                                "Location": new_loc,
-                                "Status": new_stat,
-                                "AssignedTo": new_assigned,
-                                "Attachments": (new_att or "").strip(),
-                                "EntryID": rowdata.get("EntryID","") or gen_entry_id(),
-                                "CreatedAt": now_utc_isostr(),  # <<< UTC ISO
+                            row = {
+                                "RFM": st.session_state["wo_number"].strip(),
+                                "Title": st.session_state["wo_title"].strip(),
+                                "Description": st.session_state["wo_resolution"].strip(),
+                                "Date": date_str,
+                                "Location": loc,
+                                "Status": st.session_state["wo_status"],
+                                "Attachments": st.session_state["wo_attachments"].strip(),
+                                "EntryID": gen_entry_id(),
+                                "CreatedAt": now_str,
                             }
-                            _update_rfm_row_values(ws, rownum, new_dict)
-                            st.success(f"Updated RFM{edit_wo} (row {rownum}) ✅")
+                            append_rfm_entry(row)
                         else:
-                            ws = _open_entries_ws()
-                            new_dict = {
-                                "WO": edit_wo,
-                                "Title": (new_title or "").strip(),
-                                "Resolution": (new_res or "").strip(),
-                                "Date": new_date.strftime("%Y-%m-%d"),
-                                "Location": new_loc,
-                                "Status": new_stat,
-                                "Attachments": (new_att or "").strip(),
-                                "EntryID": rowdata.get("EntryID","") or gen_entry_id(),
-                                "CreatedAt": now_utc_isostr(),  # <<< UTC ISO
+                            row = {
+                                "WO": st.session_state["wo_number"].strip(),
+                                "Title": st.session_state["wo_title"].strip(),
+                                "Resolution": st.session_state["wo_resolution"].strip(),
+                                "Date": date_str,
+                                "Location": loc,
+                                "Status": st.session_state["wo_status"],
+                                "AssignedTo": st.session_state["wo_assigned"],
+                                "Attachments": st.session_state["wo_attachments"].strip(),
+                                "EntryID": gen_entry_id(),
+                                "CreatedAt": now_str,
+                                "Capsule": st.session_state["wo_capsule"].strip(),
+                                "Bay": st.session_state["wo_bay"].strip(),
                             }
-                            _update_row_values(ws, rownum, new_dict)
-                        st.toast("Entry updated", icon="✏️")
-                        st.session_state.update({
-                            "edit_loaded": False, "edit_rownum": None,
-                            "edit_rowdata": {}, "edit_wo_selected": "",
-                        })
+                            append_entry(row)
+
                         st.cache_data.clear()
+                        st.success("Added.")
                         st.rerun()
-                except Exception as e:
-                    st.error(f"Update failed: {e}")
 
-            if cancel:
-                st.session_state.update({
-                    "edit_loaded": False, "edit_rownum": None,
-                    "edit_rowdata": {}, "edit_wo_selected": "",
-                })
-                st.info("Edit canceled.")
+                    except Exception as e:
+                        st.error(f"Failed to add: {e}")
 
-# ---- place this helper once (above the expander or near your other small helpers) ----
-def _reset_qp():
-    """Safely clear quick-progress text fields and refresh UI."""
-    for k in ("qp_id", "qp_title", "qp_note"):
-        if k in st.session_state:
-            try:
-                st.session_state[k] = ""
-            except Exception:
-                st.session_state.pop(k, None)
-    st.rerun()
+            # --- Edit Last Entry (by WO/RFM) ---
+            if st.session_state.get("ui_action") == "edit":
+                st.session_state.setdefault("edit_loaded", False)
+                st.session_state.setdefault("edit_rownum", None)
+                st.session_state.setdefault("edit_rowdata", {})
+                st.session_state.setdefault("edit_wo_selected", "")
 
-# Mirror the checkbox values into locals for readability
-keep_status = st.session_state.get("qp_keep_status", True)
-keep_baycap = st.session_state.get("qp_keep_baycap", True)
+                with st.form("edit_wo_form"):
+                    edit_label = "RFM # to edit" if is_rfm_toggle else "WO # to edit"
+                    edit_wo = st.text_input(edit_label, placeholder=("RFM-20250001" if is_rfm_toggle else "146720560")).strip()
+                    load_btn = st.form_submit_button("Load Last Entry", use_container_width=True)
 
-# --- Quick Progress Note (append) ---
-with st.sidebar.expander("📝 Quick Progress Note (append WO/RFM)", expanded=st.session_state.get("qp_open", False)):
-    # --- defaults ---
-    st.session_state.setdefault("qp_kind", "WO")
-    st.session_state.setdefault("qp_id", "")
-    st.session_state.setdefault("qp_title", "")
-    st.session_state.setdefault("qp_loc", filtered_locations_for_current()[0])
-    st.session_state.setdefault("qp_keep_status", True)
-    st.session_state.setdefault("qp_status", "NOTE")
-    st.session_state.setdefault("qp_status_rfm", "Submitted")
-    st.session_state.setdefault("qp_date", WORKING_DATE)
-    st.session_state.setdefault("qp_note", "")
-    st.session_state.setdefault("qp_capsule", "")
-    st.session_state.setdefault("qp_bay", "")
-    st.session_state.setdefault("qp_assigned_tech", "Unassigned")
+                if load_btn and edit_wo and not is_rfm_toggle:
+                    rownum, rowdata = _latest_rownum_for_wo(edit_wo)
+                    if not rownum:
+                        st.error(f"WO{edit_wo} not found.")
+                    else:
+                        st.session_state.update({
+                            "edit_loaded": True, "edit_rownum": rownum,
+                            "edit_rowdata": rowdata, "edit_wo_selected": edit_wo,
+                        })
+                        st.success(f"Loaded last entry for WO{edit_wo} (row {rownum})")
+                elif load_btn and edit_wo and is_rfm_toggle:
+                    rownum, rowdata = _latest_rownum_for_rfm(edit_wo)
+                    if not rownum:
+                        st.error(f"RFM{edit_wo} not found.")
+                    else:
+                        st.session_state.update({
+                            "edit_loaded": True, "edit_rownum": rownum,
+                            "edit_rowdata": rowdata, "edit_wo_selected": edit_wo,
+                        })
+                        st.success(f"Loaded last entry for RFM{edit_wo} (row {rownum})")
 
-    q_kind = st.radio("Type", ["WO", "RFM"], horizontal=True, key="qp_kind")
+                if st.session_state.edit_loaded and st.session_state.edit_rownum:
+                    rowdata = st.session_state.edit_rowdata
+                    edit_wo = st.session_state.edit_wo_selected
+                    rownum  = st.session_state.edit_rownum
 
-    # --- when ID changes, pull last-known details ---
-    def _on_id_change():
-        kind_local = st.session_state.get("qp_kind", "WO")
-        _id_local = str(st.session_state.get("qp_id", "")).strip()
+                    cur_date = rowdata.get("Date", "") or WORKING_DATE.strftime("%Y-%m-%d")  # <<< ET default
+                    try:
+                        cur_date_val = dt.datetime.strptime(cur_date, "%Y-%m-%d").date()
+                    except Exception:
+                        cur_date_val = WORKING_DATE
+
+                    with st.form("edit_wo_fields", clear_on_submit=False):
+                        new_title = st.text_area("Title", value=rowdata.get("Title",""), height=90, key=f"edit_title_{rownum}")
+                        label = "Description" if is_rfm_toggle else "Resolution"
+                        cur_val = rowdata.get("Description" if is_rfm_toggle else "Resolution", "")
+                        new_res = st.text_area(label, value=cur_val, height=180, key=f"edit_res_{rownum}")
+                        new_date  = st.date_input("Date", value=cur_date_val, key=f"edit_date_{rownum}")
+                        _edit_tech = str(rowdata.get("AssignedTo", "Unassigned")).strip()
+                        _edit_tech_idx = TECH_LIST.index(_edit_tech) if _edit_tech in TECH_LIST else 0
+                        new_assigned = st.selectbox("Assign To", TECH_LIST, index=_edit_tech_idx, key=f"edit_assigned_{rownum}")
+
+                        STAT_OPTS = (STATUSES if not is_rfm_toggle else ["Submitted", "WAPPR", "PO Created", "Completed"])
+                        EDIT_LOCATION_OPTIONS = filtered_locations_for_current(st.session_state.get("current_loc"))
+                        loc_val = rowdata.get("Location","")
+                        loc_idx  = EDIT_LOCATION_OPTIONS.index(loc_val) if loc_val in EDIT_LOCATION_OPTIONS else 0
+                        stat_raw = rowdata.get("Status","")
+                        stat_idx = STAT_OPTS.index(stat_raw) if stat_raw in STAT_OPTS else 0
+
+                        new_loc  = st.selectbox("Location", EDIT_LOCATION_OPTIONS, index=loc_idx, key=f"edit_loc_{rownum}")
+                        new_stat = st.selectbox("Status", STAT_OPTS, index=stat_idx, key=f"edit_stat_{rownum}")
+                        new_att  = st.text_input("Attachments (URLs, optional)", value=rowdata.get("Attachments",""), key=f"edit_att_{rownum}")
+
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            confirm = st.form_submit_button("Save Changes", use_container_width=True)
+                        with col_b:
+                            cancel  = st.form_submit_button("Cancel", use_container_width=True)
+
+                        if confirm:
+                            try:
+                                if not is_rfm_toggle and new_stat in {"Completed"} and not (new_res or "").strip():
+                                    st.warning("Resolution is required when Status is Completed.")
+                                else:
+                                    if is_rfm_toggle:
+                                        ws = _open_rfm_ws()
+                                        new_dict = {
+                                            "RFM": edit_wo,
+                                            "Title": (new_title or "").strip(),
+                                            "Description": (new_res or "").strip(),
+                                            "Date": new_date.strftime("%Y-%m-%d"),
+                                            "Location": new_loc,
+                                            "Status": new_stat,
+                                            "AssignedTo": new_assigned,
+                                            "Attachments": (new_att or "").strip(),
+                                            "EntryID": rowdata.get("EntryID","") or gen_entry_id(),
+                                            "CreatedAt": now_utc_isostr(),  # <<< UTC ISO
+                                        }
+                                        _update_rfm_row_values(ws, rownum, new_dict)
+                                        st.success(f"Updated RFM{edit_wo} (row {rownum}) ✅")
+                                    else:
+                                        ws = _open_entries_ws()
+                                        new_dict = {
+                                            "WO": edit_wo,
+                                            "Title": (new_title or "").strip(),
+                                            "Resolution": (new_res or "").strip(),
+                                            "Date": new_date.strftime("%Y-%m-%d"),
+                                            "Location": new_loc,
+                                            "Status": new_stat,
+                                            "Attachments": (new_att or "").strip(),
+                                            "EntryID": rowdata.get("EntryID","") or gen_entry_id(),
+                                            "CreatedAt": now_utc_isostr(),  # <<< UTC ISO
+                                        }
+                                        _update_row_values(ws, rownum, new_dict)
+                                    st.toast("Entry updated", icon="✏️")
+                                    st.session_state.update({
+                                        "edit_loaded": False, "edit_rownum": None,
+                                        "edit_rowdata": {}, "edit_wo_selected": "",
+                                    })
+                                    st.cache_data.clear()
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Update failed: {e}")
+
+                        if cancel:
+                            st.session_state.update({
+                                "edit_loaded": False, "edit_rownum": None,
+                                "edit_rowdata": {}, "edit_wo_selected": "",
+                            })
+                            st.info("Edit canceled.")
+
+            # ---- place this helper once (above the expander or near your other small helpers) ----
+            def _reset_qp():
+                """Safely clear quick-progress text fields and refresh UI."""
+                for k in ("qp_id", "qp_title", "qp_note"):
+                    if k in st.session_state:
+                        try:
+                            st.session_state[k] = ""
+                        except Exception:
+                            st.session_state.pop(k, None)
+
+            # Mirror the checkbox values into locals for readability
+            keep_status = st.session_state.get("qp_keep_status", True)
+            keep_baycap = st.session_state.get("qp_keep_baycap", True)
+
+            # --- Quick Progress Note (append) ---
+            if st.session_state.get("ui_action") == "update":
+                # --- defaults ---
+                st.session_state.setdefault("qp_kind", "WO")
+                st.session_state.setdefault("qp_id", "")
+                st.session_state.setdefault("qp_title", "")
+                st.session_state.setdefault("qp_loc", filtered_locations_for_current()[0])
+                st.session_state.setdefault("qp_keep_status", True)
+                st.session_state.setdefault("qp_status", "NOTE")
+                st.session_state.setdefault("qp_status_rfm", "Submitted")
+                st.session_state.setdefault("qp_date", WORKING_DATE)
+                st.session_state.setdefault("qp_note", "")
+                st.session_state.setdefault("qp_capsule", "")
+                st.session_state.setdefault("qp_bay", "")
+                st.session_state.setdefault("qp_assigned_tech", "Unassigned")
+
+                q_kind = st.radio("Type", ["WO", "RFM"], horizontal=True, key="qp_kind")
+
+                # --- when ID changes, pull last-known details ---
+                def _on_id_change():
+                    kind_local = st.session_state.get("qp_kind", "WO")
+                    _id_local = str(st.session_state.get("qp_id", "")).strip()
     
-        if not _id_local:
-            st.session_state["qp_title"] = ""
-            st.session_state["qp_loc"] = filtered_locations_for_current()[0]
-            st.session_state["qp_capsule"] = ""
-            st.session_state["qp_bay"] = ""
-            st.session_state["qp_status"] = "NOTE"
-            st.session_state["qp_status_rfm"] = "Submitted"
-            st.session_state["qp_assigned_tech"] = "Unassigned"
-            return
+                    if not _id_local:
+                        st.session_state["qp_title"] = ""
+                        st.session_state["qp_loc"] = filtered_locations_for_current()[0]
+                        st.session_state["qp_capsule"] = ""
+                        st.session_state["qp_bay"] = ""
+                        st.session_state["qp_status"] = "NOTE"
+                        st.session_state["qp_status_rfm"] = "Submitted"
+                        st.session_state["qp_assigned_tech"] = "Unassigned"
+                        return
     
-        raw = _last_for_wo(_id_local) if kind_local == "WO" else _last_for_rfm(_id_local)
-        data_local = raw if isinstance(raw, dict) else (raw.to_dict() if isinstance(raw, pd.Series) else {})
+                    raw = _last_for_wo(_id_local) if kind_local == "WO" else _last_for_rfm(_id_local)
+                    data_local = raw if isinstance(raw, dict) else (raw.to_dict() if isinstance(raw, pd.Series) else {})
     
-        if not data_local:
-            st.session_state["qp_title"] = ""
-            st.session_state["qp_loc"] = filtered_locations_for_current()[0]
-            st.session_state["qp_capsule"] = ""
-            st.session_state["qp_bay"] = ""
-            st.session_state["qp_status"] = "NOTE"
-            st.session_state["qp_status_rfm"] = "Submitted"
-            st.session_state["qp_assigned_tech"] = "Unassigned"
-            return
+                    if not data_local:
+                        st.session_state["qp_title"] = ""
+                        st.session_state["qp_loc"] = filtered_locations_for_current()[0]
+                        st.session_state["qp_capsule"] = ""
+                        st.session_state["qp_bay"] = ""
+                        st.session_state["qp_status"] = "NOTE"
+                        st.session_state["qp_status_rfm"] = "Submitted"
+                        st.session_state["qp_assigned_tech"] = "Unassigned"
+                        return
     
-        st.session_state["qp_title"] = data_local.get("Title", "")
+                    st.session_state["qp_title"] = data_local.get("Title", "")
     
-        last_loc = str(data_local.get("Location", "")).strip()
-        site_locs = filtered_locations_for_current()
-        st.session_state["qp_loc"] = last_loc if last_loc in site_locs else site_locs[0]
+                    last_loc = str(data_local.get("Location", "")).strip()
+                    site_locs = filtered_locations_for_current()
+                    st.session_state["qp_loc"] = last_loc if last_loc in site_locs else site_locs[0]
     
-        # FIXED: correct key name
-        last_person = str(data_local.get("AssignedTo", "Unassigned")).strip()
-        st.session_state["qp_assigned_tech"] = last_person if last_person in TECH_LIST else "Unassigned"
+                    # FIXED: correct key name
+                    last_person = str(data_local.get("AssignedTo", "Unassigned")).strip()
+                    st.session_state["qp_assigned_tech"] = last_person if last_person in TECH_LIST else "Unassigned"
     
-        if kind_local == "WO":
-            st.session_state["qp_capsule"] = str(data_local.get("Capsule", "")).strip()
-            st.session_state["qp_bay"] = str(data_local.get("Bay", "")).strip()
-            last_status = str(data_local.get("Status", "NOTE")).strip()
-            st.session_state["qp_status"] = last_status if last_status in STATUSES else "NOTE"
-        else:
-            st.session_state["qp_capsule"] = ""
-            st.session_state["qp_bay"] = ""
-            last_status = str(data_local.get("Status", "Submitted")).strip()
-            allowed_rfm_statuses = ["Submitted", "WAPPR", "PO Created", "Completed"]
-            st.session_state["qp_status_rfm"] = last_status if last_status in allowed_rfm_statuses else "Submitted"
+                    if kind_local == "WO":
+                        st.session_state["qp_capsule"] = str(data_local.get("Capsule", "")).strip()
+                        st.session_state["qp_bay"] = str(data_local.get("Bay", "")).strip()
+                        last_status = str(data_local.get("Status", "NOTE")).strip()
+                        st.session_state["qp_status"] = last_status if last_status in STATUSES else "NOTE"
+                    else:
+                        st.session_state["qp_capsule"] = ""
+                        st.session_state["qp_bay"] = ""
+                        last_status = str(data_local.get("Status", "Submitted")).strip()
+                        allowed_rfm_statuses = ["Submitted", "WAPPR", "PO Created", "Completed"]
+                        st.session_state["qp_status_rfm"] = last_status if last_status in allowed_rfm_statuses else "Submitted"
 
-    st.text_input("ID (#)", key="qp_id", placeholder="146720560 or 2025-0001", on_change=_on_id_change)
+                st.text_input("ID (#)", key="qp_id", placeholder="146720560 or 2025-0001", on_change=_on_id_change)
 
-    # --- last-known preview ---
-    _id_preview = str(st.session_state.get("qp_id", ""))
-    if _id_preview:
-        latest_data = _last_for_wo(_id_preview) if q_kind == "WO" else _last_for_rfm(_id_preview)
-        if isinstance(latest_data, pd.Series):
-            latest_data = latest_data.to_dict()
-        if isinstance(latest_data, dict) and latest_data:
-            _dt = latest_data.get("Date","")
-            _st = latest_data.get("Status","")
-            _ti = latest_data.get("Title","")
-            _lo = latest_data.get("Location","")
-            st.caption(f"Last known: **{_ti}**  [{_lo}] — {_st}  ({_dt})")
-            # This shows the 'Last Status' for the tech
-            _last_tech = latest_data.get("AssignedTo", "Unassigned")
-            st.caption(f"Last Tech: **{_last_tech}**")
-            # st.caption(f"Last Tech: **{latest_data.get('Assigned To', 'None')}**")
+                # --- last-known preview ---
+                _id_preview = str(st.session_state.get("qp_id", ""))
+                if _id_preview:
+                    latest_data = _last_for_wo(_id_preview) if q_kind == "WO" else _last_for_rfm(_id_preview)
+                    if isinstance(latest_data, pd.Series):
+                        latest_data = latest_data.to_dict()
+                    if isinstance(latest_data, dict) and latest_data:
+                        _dt = latest_data.get("Date","")
+                        _st = latest_data.get("Status","")
+                        _ti = latest_data.get("Title","")
+                        _lo = latest_data.get("Location","")
+                        st.caption(f"Last known: **{_ti}**  [{_lo}] — {_st}  ({_dt})")
+                        # This shows the 'Last Status' for the tech
+                        _last_tech = latest_data.get("AssignedTo", "Unassigned")
+                        st.caption(f"Last Tech: **{_last_tech}**")
+                        # st.caption(f"Last Tech: **{latest_data.get('Assigned To', 'None')}**")
             
 
-    # --- location guard ---
-    QP_LOCATION_OPTIONS = filtered_locations_for_current(st.session_state.get("current_loc"))
-    cur_qp_loc = st.session_state.get("qp_loc", QP_LOCATION_OPTIONS[0])
-    if cur_qp_loc not in QP_LOCATION_OPTIONS:
-        st.session_state["qp_loc"] = QP_LOCATION_OPTIONS[0]
+                # --- location guard ---
+                QP_LOCATION_OPTIONS = filtered_locations_for_current(st.session_state.get("current_loc"))
+                cur_qp_loc = st.session_state.get("qp_loc", QP_LOCATION_OPTIONS[0])
+                if cur_qp_loc not in QP_LOCATION_OPTIONS:
+                    st.session_state["qp_loc"] = QP_LOCATION_OPTIONS[0]
 
-    st.text_input("Title (optional)", key="qp_title", placeholder="auto-fills from last known")
-    st.selectbox("Location", QP_LOCATION_OPTIONS, key="qp_loc")
+                st.text_input("Title (optional)", key="qp_title", placeholder="auto-fills from last known")
+                st.selectbox("Location", QP_LOCATION_OPTIONS, key="qp_loc")
 
-        # --- keep toggles (INSIDE the QP SIDEBAR EXPANDER) ---
-    col_keep_a, col_keep_b = st.columns(2)
-    with col_keep_a:
-        st.checkbox("Keep last STATUS", key="qp_keep_status",
-                    value=st.session_state.get("qp_keep_status", True))
-    with col_keep_b:
-        st.checkbox("Keep last Bay/Capsule", key="qp_keep_baycap",
-                    value=st.session_state.get("qp_keep_baycap", True),
-                    help="WO only")
+                    # --- keep toggles (INSIDE the QP SIDEBAR EXPANDER) ---
+                col_keep_a, col_keep_b = st.columns(2)
+                with col_keep_a:
+                    st.checkbox("Keep last STATUS", key="qp_keep_status",
+                                value=st.session_state.get("qp_keep_status", True))
+                with col_keep_b:
+                    st.checkbox("Keep last Bay/Capsule", key="qp_keep_baycap",
+                                value=st.session_state.get("qp_keep_baycap", True),
+                                help="WO only")
 
-    # --- STATUS selector (only when NOT keeping) ---
-    if not st.session_state.get("qp_keep_status", True):
-        if q_kind == "WO":
-            st.selectbox("Status (WO)", STATUSES, key="qp_status")
-        else:
-            st.selectbox("Status (RFM)", ["Submitted", "WAPPR", "PO Created", "Completed"], key="qp_status_rfm")
+                # --- STATUS selector (only when NOT keeping) ---
+                if not st.session_state.get("qp_keep_status", True):
+                    if q_kind == "WO":
+                        st.selectbox("Status (WO)", STATUSES, key="qp_status")
+                    else:
+                        st.selectbox("Status (RFM)", ["Submitted", "WAPPR", "PO Created", "Completed"], key="qp_status_rfm")
 
 
-    # Only show Bay/Capsule pickers when editing a WO and NOT keeping last entry
-    if q_kind == "WO":
-        if not keep_baycap:
-            bay_options_qp = ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"]
-            st.selectbox(
-                "Bay",
-                bay_options_qp,
-                index=bay_options_qp.index(st.session_state["qp_bay"]) if st.session_state["qp_bay"] in bay_options_qp else 0,
-                key="qp_bay",
-            )
-            cap_options_qp = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5","Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
-            st.selectbox(
-                "Capsule #",
-                cap_options_qp,
-                index=cap_options_qp.index(st.session_state["qp_capsule"]) if st.session_state["qp_capsule"] in cap_options_qp else 0,
-                key="qp_capsule",
-            )
-        else:
-            # Read-only hint so users know what will be kept
-            last_bay = st.session_state.get("qp_bay","") or "—"
-            last_cap = st.session_state.get("qp_capsule","") or "—"
-            st.caption(f"Using last known Bay/Capsule: {last_bay} / {last_cap}")
+                # Only show Bay/Capsule pickers when editing a WO and NOT keeping last entry
+                if q_kind == "WO":
+                    if not keep_baycap:
+                        bay_options_qp = ["", "Bay 1", "Bay 2", "Bay 3", "Bay 4"]
+                        st.selectbox(
+                            "Bay",
+                            bay_options_qp,
+                            index=bay_options_qp.index(st.session_state["qp_bay"]) if st.session_state["qp_bay"] in bay_options_qp else 0,
+                            key="qp_bay",
+                        )
+                        cap_options_qp = ["", "Cap #1","Cap #2","Cap #3","Cap #4","Cap #5","Cap #6","Cap #7","Cap #8","Cap #9","Cap #10"]
+                        st.selectbox(
+                            "Capsule #",
+                            cap_options_qp,
+                            index=cap_options_qp.index(st.session_state["qp_capsule"]) if st.session_state["qp_capsule"] in cap_options_qp else 0,
+                            key="qp_capsule",
+                        )
+                    else:
+                        # Read-only hint so users know what will be kept
+                        last_bay = st.session_state.get("qp_bay","") or "—"
+                        last_cap = st.session_state.get("qp_capsule","") or "—"
+                        st.caption(f"Using last known Bay/Capsule: {last_bay} / {last_cap}")
 
-    st.date_input("Date", key="qp_date")
-    _cur_tech = st.session_state.get("qp_assigned_tech", "Unassigned")
-    _tech_idx = TECH_LIST.index(_cur_tech) if _cur_tech in TECH_LIST else 0
-    st.selectbox("Assign To", TECH_LIST, index=_tech_idx, key="qp_assigned_tech")
-    st.text_area(
-        "Work Performed / Resolution",
-        key="qp_note",
-        height=120,
-        help="General work log for this WO/RFM. Use 'Capsule Notes' tab for capsule ID tracking.",
-    )
+                _qp_date_col, _qp_tech_col = st.columns(2)
+                _qp_date_col.date_input("Working date", key="qp_date")
+                _cur_tech = st.session_state.get("qp_assigned_tech", "Unassigned")
+                _tech_idx = TECH_LIST.index(_cur_tech) if _cur_tech in TECH_LIST else 0
+                _qp_tech_col.selectbox("Assign To", TECH_LIST, index=_tech_idx, key="qp_assigned_tech")
+                st.text_area(
+                    "Work Performed / Resolution",
+                    key="qp_note",
+                    height=120,
+                    help="General work log for this WO/RFM. Use 'Capsule Notes' tab for capsule ID tracking.",
+                )
 
     
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Append Note", use_container_width=True, key="qp_submit_btn"):
-            try:
-                kind_local = st.session_state.get("qp_kind", "WO")
-                _id_local  = str(st.session_state.get("qp_id", ""))
-                if not _id_local.strip():
-                    st.error("ID is required (WO or RFM number).")
-                else:
-                    title_val = st.session_state.get("qp_title","") or None
-                    note_val  = st.session_state.get("qp_note","")
-                    loc_val   = st.session_state.get("qp_loc", filtered_locations_for_current()[0])
-                    datev_val = st.session_state.get("qp_date", today_et())  # <<< ET date
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Append Note", use_container_width=True, key="qp_submit_btn"):
+                        try:
+                            kind_local = st.session_state.get("qp_kind", "WO")
+                            _id_local  = str(st.session_state.get("qp_id", ""))
+                            if not _id_local.strip():
+                                st.error("ID is required (WO or RFM number).")
+                            else:
+                                title_val = st.session_state.get("qp_title","") or None
+                                note_val  = st.session_state.get("qp_note","")
+                                loc_val   = st.session_state.get("qp_loc", filtered_locations_for_current()[0])
+                                datev_val = st.session_state.get("qp_date", today_et())  # <<< ET date
 
-                    # STATUS to write
-                    status_val = None
-                    if not st.session_state.get("qp_keep_status", True):
-                        status_val = st.session_state.get("qp_status") if q_kind == "WO" else st.session_state.get("qp_status_rfm")
+                                # STATUS to write
+                                status_val = None
+                                if not st.session_state.get("qp_keep_status", True):
+                                    status_val = st.session_state.get("qp_status") if q_kind == "WO" else st.session_state.get("qp_status_rfm")
 
-                    # BAY/CAPSULE overrides
-                    cap_override = bay_override = None
-                    if q_kind == "WO":
-                        if not st.session_state.get("qp_keep_baycap", True):
-                            cap_sel = st.session_state.get("qp_capsule","")
-                            bay_sel = st.session_state.get("qp_bay","")
-                            cap_override = cap_sel or None
-                            bay_override = bay_sel or None
+                                # BAY/CAPSULE overrides
+                                cap_override = bay_override = None
+                                if q_kind == "WO":
+                                    if not st.session_state.get("qp_keep_baycap", True):
+                                        cap_sel = st.session_state.get("qp_capsule","")
+                                        bay_sel = st.session_state.get("qp_bay","")
+                                        cap_override = cap_sel or None
+                                        bay_override = bay_sel or None
 
-                        append_progress_note(
-                            _id_local, title_val, note_val, status_val, loc_val, datev_val,
-                            capsule_override=cap_override,
-                            assigned_to=st.session_state.get("qp_assigned_tech"),
-                            bay_override=bay_override,
-                        )
-                    else:
-                        append_rfm_note(_id_local, title_val, note_val, status_val, loc_val, datev_val)
+                                    append_progress_note(
+                                        _id_local, title_val, note_val, status_val, loc_val, datev_val,
+                                        capsule_override=cap_override,
+                                        assigned_to=st.session_state.get("qp_assigned_tech"),
+                                        bay_override=bay_override,
+                                    )
+                                else:
+                                    append_rfm_note(_id_local, title_val, note_val, status_val, loc_val, datev_val)
 
 
-                    st.toast("Note appended ✅", icon="🧷")
-                    st.cache_data.clear()
-                    st.session_state["qp_open"] = True  # keep the panel open on refresh
-                    st.rerun()  # immediate refresh so Today WO updates
+                                st.toast("Note appended ✅", icon="🧷")
+                                st.cache_data.clear()
+                                st.session_state["qp_open"] = True  # keep the panel open on refresh
+                                st.rerun()  # immediate refresh so Today WO updates
 
-            except Exception as e:
-                st.error(f"Could not append: {e}")
-    with c2:
-        if st.button("Clear", use_container_width=True, key="qp_clear_btn"):
-            _reset_qp()
+                        except Exception as e:
+                            st.error(f"Could not append: {e}")
+                with c2:
+                    st.button("Clear", use_container_width=True, key="qp_clear_btn", on_click=_reset_qp)
 
 
 # --- Diagnostics + CSV backup ---
-with st.expander("Sheet Diagnostics", expanded=False):
-    try:
-        gc = get_gc()
-        sh = open_spreadsheet(gc=gc)
-        st.write("**Spreadsheet title:**", sh.title)
+if show_diagnostics:
+    with st.expander("Sheet Diagnostics", expanded=False):
         try:
-            st.write("**Spreadsheet URL:**", sh.url)
-        except Exception:
-            pass
-        tabs = [ws.title for ws in sh.worksheets()]
-        st.write("**Tabs found:**", tabs)
+            gc = get_gc()
+            sh = open_spreadsheet(gc=gc)
+            st.write("**Spreadsheet title:**", sh.title)
+            try:
+                st.write("**Spreadsheet URL:**", sh.url)
+            except Exception:
+                pass
+            tabs = [ws.title for ws in sh.worksheets()]
+            st.write("**Tabs found:**", tabs)
 
-        # RAW SHEET INSPECTOR
-        st.markdown("---")
-        st.markdown("#### 🔬 Raw Sheet Inspector")
-        _diag_ws = sh.worksheet(TAB_NAME)
-        _raw_headers = _diag_ws.row_values(1)
-        st.write("**Sheet headers:**", _raw_headers)
-        st.write("**CapsuleID col index:**", _raw_headers.index("CapsuleID") if "CapsuleID" in _raw_headers else "MISSING")
-        st.write("**Resolution col index:**", _raw_headers.index("Resolution") if "Resolution" in _raw_headers else "MISSING")
+            # RAW SHEET INSPECTOR
+            st.markdown("---")
+            st.markdown("#### 🔬 Raw Sheet Inspector")
+            _diag_ws = sh.worksheet(TAB_NAME)
+            _raw_headers = _diag_ws.row_values(1)
+            st.write("**Sheet headers:**", _raw_headers)
+            st.write("**CapsuleID col index:**", _raw_headers.index("CapsuleID") if "CapsuleID" in _raw_headers else "MISSING")
+            st.write("**Resolution col index:**", _raw_headers.index("Resolution") if "Resolution" in _raw_headers else "MISSING")
 
-        # What load_df actually produces for CAP rows
-        st.markdown("**load_df() CAP rows (first 3):**")
-        _ldf = load_df()
-        _cap_ldf = _ldf[_ldf["WO"].astype(str).str.startswith("CAP-")].head(3)
-        if not _cap_ldf.empty:
-            st.dataframe(_cap_ldf[["WO","Title","Resolution","Capsule","Bay","CapsuleID","AssignedTo","Status"]])
-        else:
-            st.warning("No CAP- rows in load_df()")
+            # What load_df actually produces for CAP rows
+            st.markdown("**load_df() CAP rows (first 3):**")
+            _ldf = load_df()
+            _cap_ldf = _ldf[_ldf["WO"].astype(str).str.startswith("CAP-")].head(3)
+            if not _cap_ldf.empty:
+                st.dataframe(_cap_ldf[["WO","Title","Resolution","Capsule","Bay","CapsuleID","AssignedTo","Status"]])
+            else:
+                st.warning("No CAP- rows in load_df()")
 
-        # Search test + find rows that actually have Resolution data
+            # Search test + find rows that actually have Resolution data
 
 
-        colA, colB = st.columns(2)
-        with colA:
-            if st.button("Create/Repair tab & headers", key="diag_repair_headers_btn"):
-                ws = _open_entries_ws()
-                first_row = _with_backoff(ws.row_values, 1)
-                if not first_row or [c.strip() for c in first_row] != EXPECTED_HEADERS:
-                    _with_backoff(ws.update, "A1", [EXPECTED_HEADERS])
-                    try:
-                        ws.freeze(rows=1)
-                    except Exception:
-                        pass
-                st.success(f"'{TAB_NAME}' tab ready with headers.")
-        with colB:
-            if st.button("Run write test", key="diag_write_test_btn"):
-                test = {
-                    "WO": "TEST-000",
-                    "Title": "Diagnostics write test",
-                    "Resolution": "If you see this row in Sheets, writes work.",
-                    "Date": WORKING_DATE.strftime("%Y-%m-%d"),
-                    "Location": filtered_locations_for_current()[0],
-                    "Status": "WIP",
-                    "Attachments": "",
-                    "EntryID": gen_entry_id(),
-                    "CreatedAt": now_utc_isostr(),            # <<< UTC ISO
-                }
-                append_entry(test)
-                st.success("Wrote test row. Check the sheet.")
-    except APIError as e:
-        st.error("Diagnostics: Google Sheets API error.")
-        st.code(_explain_api_error(e))
-    except Exception as e:
-        st.error(f"Diagnostics error: {e}")
+            colA, colB = st.columns(2)
+            with colA:
+                if st.button("Create/Repair tab & headers", key="diag_repair_headers_btn"):
+                    ws = _open_entries_ws()
+                    first_row = _with_backoff(ws.row_values, 1)
+                    if not first_row or [c.strip() for c in first_row] != EXPECTED_HEADERS:
+                        _with_backoff(ws.update, "A1", [EXPECTED_HEADERS])
+                        try:
+                            ws.freeze(rows=1)
+                        except Exception:
+                            pass
+                    st.success(f"'{TAB_NAME}' tab ready with headers.")
+            with colB:
+                if st.button("Run write test", key="diag_write_test_btn"):
+                    test = {
+                        "WO": "TEST-000",
+                        "Title": "Diagnostics write test",
+                        "Resolution": "If you see this row in Sheets, writes work.",
+                        "Date": WORKING_DATE.strftime("%Y-%m-%d"),
+                        "Location": filtered_locations_for_current()[0],
+                        "Status": "WIP",
+                        "Attachments": "",
+                        "EntryID": gen_entry_id(),
+                        "CreatedAt": now_utc_isostr(),            # <<< UTC ISO
+                    }
+                    append_entry(test)
+                    st.success("Wrote test row. Check the sheet.")
+        except APIError as e:
+            st.error("Diagnostics: Google Sheets API error.")
+            st.code(_explain_api_error(e))
+        except Exception as e:
+            st.error(f"Diagnostics error: {e}")
 
 st.divider()
 try:
     csv_bytes = df_scoped.to_csv(index=False).encode("utf-8")
-    st.download_button("Download CSV (backup)", csv_bytes,
+    st.sidebar.download_button("Download CSV backup", csv_bytes,
                        file_name="turnover_log.csv", mime="text/csv",
                        use_container_width=True, key="download_csv_btn")
 except Exception:
