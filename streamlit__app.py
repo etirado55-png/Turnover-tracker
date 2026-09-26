@@ -1151,6 +1151,16 @@ def transform_imported_work_orders(raw_df: pd.DataFrame, default_location: str) 
     )
     out.loc[coded_location, "Location"] = "MS General"
 
+        # Detect ECFK anywhere in an uploaded row → SPACE 220.
+    is_space_220 = raw_df.fillna("").apply(
+        lambda row: any(
+            re.search(r"\bECFK\w*", str(value), flags=re.IGNORECASE)
+            for value in row
+        ),
+        axis=1,
+    )
+    out.loc[is_space_220, "Location"] = "SPACE 220"
+
     parsed_dates = pd.to_datetime(out["Date"].map(_parse_import_date), errors="coerce")
     # Source exports use the following calendar date. Store every imported
     # scheduled date against the prior work date so import matches turnover.
