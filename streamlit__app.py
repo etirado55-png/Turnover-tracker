@@ -1117,6 +1117,40 @@ def transform_imported_work_orders(raw_df: pd.DataFrame, default_location: str) 
     out["Status"] = out["Status"].map(_normalize_import_status)
     out["Location"] = out["Location"].map(lambda v: _normalize_import_location(v, default_location))
 
+        # Detect bay codes anywhere in each uploaded row.
+    bay_map = {
+        "ECFND1": "Bay 1",
+        "ECFND2": "Bay 2",
+        "ECFND3": "Bay 3",
+        "ECFND4": "Bay 4",
+    }
+
+    detected_bays = []
+    for _, row in raw_df.fillna("").iterrows():
+        codes = {
+            code
+            for value in row
+            for code in re.findall(
+                r"\bECFND[1-4]\b", str(value).upper()
+            )
+        }
+        if len(codes) > 1:
+            raise ValueError(
+                "Multiple bay codes found in one row: "
+                + ", ".join(sorted(codes))
+            )
+        detected_bays.append(bay_map[next(iter(codes))] if codes else "")
+
+    detected_bays = pd.Series(detected_bays, index=out.index)
+    has_bay = detected_bays.ne("")
+    out.loc[has_bay, "Bay"] = detected_bays[has_bay]
+
+    # If the code was the Location, keep it under Mission Space.
+    coded_location = (
+        out["Location"].astype(str).str.strip().str.upper().isin(bay_map)
+    )
+    out.loc[coded_location, "Location"] = "MS General"
+
     parsed_dates = pd.to_datetime(out["Date"].map(_parse_import_date), errors="coerce")
     # Source exports use the following calendar date. Store every imported
     # scheduled date against the prior work date so import matches turnover.
