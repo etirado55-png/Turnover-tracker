@@ -2810,6 +2810,21 @@ elif current_tab == "Capsule Notes":
 # ===================== Asset # TAB CONTENT =====================
 elif current_tab == "Asset #":
     _section_header("Capsule Asset Numbers", color="#FF6B6B", icon="🔖")
+    
+    def _asset_with_bearing(row, asset_col):
+        asset_value = row.get(asset_col, "") if asset_col else ""
+        bearing_value = row.get("Bearing Replacement", "")
+
+        asset = "" if pd.isna(asset_value) else str(asset_value).strip()
+        bearing = "" if pd.isna(bearing_value) else str(bearing_value).strip()
+
+        if bearing:
+            return (
+                f"{asset} | Bearing Replacement: {bearing}"
+                if asset
+                else f"Bearing Replacement: {bearing}"
+            )
+        return asset
 
     try:
         assets_df = load_assets_df()
@@ -2881,7 +2896,7 @@ elif current_tab == "Asset #":
             )
             for _, row in bay_df.iterrows():
                 cap   = str(row[cap_col] if cap_col else "").strip()
-                asset = str(row[asset_col] if asset_col else "").strip()
+                asset = _asset_with_bearing(row, asset_col)
                 if not cap and not asset:
                     continue
                 st.markdown(
@@ -2918,7 +2933,7 @@ elif current_tab == "Asset #":
                 st.caption("Unassigned to a bay:")
                 for _, row in no_bay.iterrows():
                     cap   = str(row[cap_col] if cap_col else "").strip()
-                    asset = str(row[asset_col] if asset_col else "").strip()
+                    asset = _asset_with_bearing(row, asset_col)
                     if cap or asset:
                         st.markdown(
                             f"<span style='color:#FF6B6B;font-weight:700;'>{html.escape(cap)}</span>"
@@ -2930,7 +2945,7 @@ elif current_tab == "Asset #":
             st.caption(f"{len(filtered_assets)} assets")
             for _, row in filtered_assets.iterrows():
                 cap   = str(row.iloc[0] if cap_col else "").strip()
-                asset = str(row.iloc[1] if asset_col else "").strip()
+                asset = _asset_with_bearing(row, asset_col)
                 if not cap and not asset:
                     continue
                 st.markdown(
