@@ -2818,13 +2818,18 @@ elif current_tab == "Asset #":
         asset = "" if pd.isna(asset_value) else str(asset_value).strip()
         bearing = "" if pd.isna(bearing_value) else str(bearing_value).strip()
 
+        result = html.escape(asset)
+
         if bearing:
-            return (
-                f"{asset} | Bearing Replacement: {bearing}"
-                if asset
-                else f"Bearing Replacement: {bearing}"
+            separator = " | " if asset else ""
+            result += (
+                f"{separator}"
+                f"<span style='color:#22C55E;font-weight:600;'>"
+                f"Bearing Replacement: {html.escape(bearing)}"
+                f"</span>"
             )
-        return asset
+
+        return result
 
     try:
         assets_df = load_assets_df()
@@ -2904,7 +2909,7 @@ elif current_tab == "Asset #":
                 st.markdown(
                     f"<div style='margin:.35rem 0;'>"
                     f"<span style='color:#FF6B6B;font-size:1.05rem;font-weight:700;'>{html.escape(cap)}</span>"
-                    + (f"<span style='font-size:1rem;'> — {html.escape(asset)}</span>" if asset else "")
+                    + (f"<span style='font-size:1rem;'> — {asset}</span>" if asset else "")
                     + "</div>",
                     unsafe_allow_html=True,
                 )
@@ -2939,7 +2944,7 @@ elif current_tab == "Asset #":
                     if cap or asset:
                         st.markdown(
                             f"<span style='color:#FF6B6B;font-weight:700;'>{html.escape(cap)}</span>"
-                            + (f" — {html.escape(asset)}" if asset else ""),
+                            + (f" — {asset}" if asset else ""),
                             unsafe_allow_html=True,
                         )
         else:
@@ -2952,7 +2957,7 @@ elif current_tab == "Asset #":
                     continue
                 st.markdown(
                     f"<span style='color:#FF6B6B;font-size:1.05rem;font-weight:700;'>{html.escape(cap)}</span>"
-                    + (f" — {html.escape(asset)}" if asset else ""),
+                    + (f" — {asset}" if asset else ""),
                     unsafe_allow_html=True,
                 )
 
