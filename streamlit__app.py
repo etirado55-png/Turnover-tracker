@@ -2828,6 +2828,8 @@ elif current_tab == "Asset #":
 
     try:
         assets_df = load_assets_df()
+        st.write("Sheet headers:", [repr(c) for c in assets_df.columns])
+        st.dataframe(assets_df, use_container_width=True)
     except Exception as e:
         st.error(f"Could not load Asset # sheet: {e}")
         assets_df = pd.DataFrame(columns=["Capsule", "Asset"])
