@@ -1715,10 +1715,51 @@ def _amvs_context(frame, question, byte_limit=160000):
                      "retrieval": "Full catalogue when within size limit; approximate ranking is not a diagnosis"}
 
 
+def append_amvs_comment(apex_message, expected_comments, new_comment):
+    """Resolve the selected fault again before writing only its Comments cell."""
+    if not is_editor:
+        raise PermissionError("Editor access is required to add comments.")
+    note = str(new_comment).strip()
+    if not note:
+        raise ValueError("Enter a comment before saving.")
+    sh = open_spreadsheet(gc=get_gc())
+    ws = _with_backoff(sh.worksheet, "AMVS Faults")
+    values = _with_backoff(ws.get_all_values)
+    if not values:
+        raise ValueError("The fault sheet is empty. Refresh the fault list.")
+    headers = [str(v).strip().casefold() for v in values[0]]
+    if "apex messages" not in headers or "comments" not in headers:
+        raise ValueError("The sheet needs Apex Messages and Comments columns.")
+    message_col, comment_col = headers.index("apex messages"), headers.index("comments")
+    matches = [(number, row) for number, row in enumerate(values[1:], start=2)
+               if len(row) > message_col and str(row[message_col]).strip() == apex_message]
+    if len(matches) != 1:
+        raise ValueError("This Apex message is missing or duplicated in the sheet. "
+                         "Resolve it in Google Sheets and refresh before saving.")
+    row_number, row = matches[0]
+    current = str(row[comment_col]).strip() if len(row) > comment_col else ""
+    if current != expected_comments:
+        load_amvs_faults_df.clear()
+        raise ValueError("Comments changed since you opened this fault. Refresh the fault list "
+                         "and review the latest comments before saving again.")
+    updated = current + "\n\n" + note if current else note
+    if len(updated) > 50000:
+        raise ValueError("The combined comments are too long for one Google Sheets cell.")
+    number, column = comment_col + 1, ""
+    while number:
+        number, remainder = divmod(number - 1, 26)
+        column = chr(65 + remainder) + column
+    _with_backoff(ws.update, range_name=f"{column}{row_number}",
+                  values=[[updated]], value_input_option="RAW")
+    load_amvs_faults_df.clear()
+
+
 def render_amvs_faults():
     _section_header("AMVS Faults", color="#65D9C6", icon="🔎")
     st.caption("Search Apex messages, explanations, or comments. Partial wording and small typos are supported. "
                "For a symptom description, select AMVS Faults in the Assistant tab.")
+    if st.session_state.pop("amvs_comment_saved", False):
+        st.success("Comment saved to Google Sheets.")
     if st.button("Refresh fault list", key="amvs_refresh"):
         load_amvs_faults_df.clear()
     try:
@@ -1734,13 +1775,42 @@ def render_amvs_faults():
     if results.empty:
         st.info("No matching faults. Try fewer words or describe the symptom in the Assistant.")
         return
-    st.dataframe(results[AMVS_COLUMNS], hide_index=True, use_container_width=True)
-    for _, row in results.iterrows():
-        with st.expander(row["Apex Messages"]):
-            st.markdown("**Explanation**")
-            st.write(row["Explanation"] or "No explanation entered.")
-            st.markdown("**Comments**")
-            st.write(row["Comments"] or "No comments entered.")
+    st.caption("Select a row to open its full details and comments below.")
+    # Reset selection when results change so a selected position never points at a different fault.
+    table_signature = hashlib.sha256(
+        (query + results[AMVS_COLUMNS].to_json(orient="records")).encode()
+    ).hexdigest()[:16]
+    event = st.dataframe(
+        results[AMVS_COLUMNS], hide_index=True, use_container_width=True,
+        on_select="rerun", selection_mode="single-row", key=f"amvs_table_{table_signature}",
+    )
+    selected = event.selection.rows
+    if not selected or selected[0] >= len(results):
+        return
+    row = results.iloc[selected[0]]
+    with st.expander(row["Apex Messages"], expanded=True):
+        st.markdown("**Explanation**")
+        st.write(row["Explanation"] or "No explanation entered.")
+        st.markdown("**Comments**")
+        st.write(row["Comments"] or "No comments entered.")
+        if not is_editor:
+            st.caption("Editor access is required to add comments.")
+            return
+        fault_key = hashlib.sha256(
+            (row["Apex Messages"] + "\0" + row["Comments"]).encode()
+        ).hexdigest()[:16]
+        with st.form(f"amvs_comment_form_{fault_key}"):
+            note = st.text_area("Add a comment", key=f"amvs_note_{fault_key}",
+                                max_chars=5000, placeholder="Add troubleshooting notes or observations…")
+            submitted = st.form_submit_button("Save comment")
+        if submitted:
+            try:
+                append_amvs_comment(row["Apex Messages"], row["Comments"], note)
+            except Exception as exc:
+                st.error(f"Comment was not saved: {exc}")
+            else:
+                st.session_state["amvs_comment_saved"] = True
+                st.rerun()
 
 
 # ===================== Read-only Turnover Assistant =====================
